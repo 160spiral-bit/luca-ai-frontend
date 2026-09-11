@@ -68,7 +68,26 @@ export const loadSettings = (): Settings => {
 };
 export const saveSettings = (s: Settings) => set(K.settings, JSON.stringify(s));
 
-export const loadSessions = (): Session[] => { try { const p = JSON.parse(get(K.sessions) || "[]"); return Array.isArray(p) ? p : []; } catch { return []; } };
+export const loadSessions = (): Session[] => {
+  try {
+    const p = JSON.parse(get(K.sessions) || "[]");
+    if (!Array.isArray(p)) return [];
+    // A stream can never survive a page reload: any message saved mid-stream
+    // would otherwise render a stuck "thinking" spinner forever (or look like
+    // it's regenerating). Settle them: empty stubs become interrupted (Retry
+    // button), partial content just stops streaming.
+    for (const s of p) {
+      if (!s || !Array.isArray(s.messages)) continue;
+      for (const m of s.messages) {
+        if (m && m.streaming) {
+          m.streaming = false;
+          if (m.role === "assistant" && !String(m.content || "").trim()) m.interrupted = true;
+        }
+      }
+    }
+    return p;
+  } catch { return []; }
+};
 export const saveSessions = (l: Session[]) => set(K.sessions, JSON.stringify(l.slice(0, 500)));
 export const loadActiveId = (): string | null => get(K.active);
 export const saveActiveId = (id: string | null) => { if (id) set(K.active, id); else del(K.active); };
