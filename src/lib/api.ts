@@ -18,6 +18,9 @@ export type EngineEvent =
   | { kind: "tool-end"; roundId: string; sources: { title: string; url: string; host: string }[]; ms: number }
   | { kind: "meta"; model: string; provider: string; pinned?: boolean }
   | { kind: "error"; message: string; code?: string; retryable?: boolean }
+  | { kind: "artifact_start"; id: string; artifactType: string; title: string }
+  | { kind: "artifact_delta"; id: string; chunk: string }
+  | { kind: "artifact_end"; id: string }
   | { kind: "reset" }
   | { kind: "done" };
 
@@ -49,14 +52,34 @@ export async function* streamChat(opts: {
     const dec = new TextDecoder();
     let buf = "";
     let sawDone = false;
+    let currentEvent = "";
     const q: EngineEvent[] = [];
     const handleLine = (line: string) => {
-      const t = line.trim();
-      if (!t.startsWith("data:")) return;
-      const payload = t.slice(5).trim();
-      if (payload === "[DONE]") { sawDone = true; return; }
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith("event:")) { currentEvent = trimmed.slice(6).trim(); return; }
+      if (!trimmed.startsWith("data:")) return;
+      const payload = trimmed.slice(5).trim();
+      if (payload === "[DONE]") { sawDone = true; currentEvent = ""; return; }
       try {
         const j = JSON.parse(payload);
+        // Artifact channel — separate from content so panel and bubble render concurrently
+        if (currentEvent === "artifact_start" || j.artifactType) {
+          if (j.id) q.push({ kind: "artifact_start", id: String(j.id), artifactType: String(j.artifactType || "html"), title: String(j.title || "Artifact") });
+          currentEvent = ""; return;
+        }
+        if (currentEvent === "artifact_delta") {
+          if (j.id && typeof j.chunk === "string") q.push({ kind: "artifact_delta", id: String(j.id), chunk: j.chunk });
+          currentEvent = ""; return;
+        }
+        if (currentEvent === "artifact_end") {
+          if (j.id) q.push({ kind: "artifact_end", id: String(j.id) });
+          currentEvent = ""; return;
+        }
+        // Legacy artifact payload without event: prefix
+        if (j.event === "artifact_start" && j.id) { q.push({ kind: "artifact_start", id: String(j.id), artifactType: String(j.artifactType || "html"), title: String(j.title || "Artifact") }); return; }
+        if (j.event === "artifact_delta" && j.id) { q.push({ kind: "artifact_delta", id: String(j.id), chunk: String(j.chunk || "") }); return; }
+        if (j.event === "artifact_end" && j.id) { q.push({ kind: "artifact_end", id: String(j.id) }); return; }
         if (j.retry_after_stall) q.push({ kind: "reset" });
         if (j.meta && j.meta.model) q.push({ kind: "meta", model: String(j.meta.model), provider: String(j.meta.provider || ""), pinned: !!j.meta.pinned });
         if (typeof j.reasoning === "string" && j.reasoning) q.push({ kind: "reasoning", text: j.reasoning });
@@ -74,8 +97,6 @@ export async function* streamChat(opts: {
         const c = typeof j.content === "string" ? j.content : typeof j.reply === "string" ? j.reply : "";
         if (c) q.push({ kind: "content", text: c });
         if (j.error && typeof j.error === "string") {
-          // Prefer structured error event so the UI can show Retry / Edit actions.
-          // Only fall back to inline italic if no content was sent at all (legacy).
           if (!c) q.push({ kind: "error", message: j.error, code: typeof j.code === "string" ? j.code : undefined, retryable: !!j.retryable });
           else q.push({ kind: "content", text: "\n\n_" + j.error + "_" });
         }
@@ -89,6 +110,7 @@ export async function* streamChat(opts: {
           }
         }
       } catch { /* partial line */ }
+      currentEvent = "";
     };
     for (;;) {
       const { done, value } = await reader.read();

@@ -5,6 +5,7 @@ import ChatArea from "./components/ChatArea";
 import Composer from "./components/Composer";
 import Logo from "./components/Logo";
 import Auth from "./components/Auth";
+import ArtifactPanel from "./components/ArtifactPanel";
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
 import { followups, nameChat, refreshMe, streamChat, verifyToken } from "./lib/api";
@@ -16,7 +17,7 @@ import {
   resetAll, saveActiveId, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
-import type { Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
+import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
 
 const HERO_SUGGESTIONS = ["Draft an email", "Explain a tough concept", "Help me write code"];
 
@@ -35,6 +36,8 @@ export default function App({ namespace }: { namespace: string }) {
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
+  const [artifacts, setArtifacts] = useState<Record<string, Artifact>>({});
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuthUser());
   const [authLoading, setAuthLoading] = useState(true);
   const [guest, setGuestState] = useState(() => isGuest());
@@ -247,6 +250,27 @@ export default function App({ namespace }: { namespace: string }) {
           case "tool-start": patchRound(sid, auid, ev.roundId, { name: ev.name, query: ev.query, status: "running" }); break;
           case "tool-end": patchRound(sid, auid, ev.roundId, { sources: ev.sources, status: "done", ms: ev.ms }); break;
           case "error": patchMsg(sid, auid, { error: ev.message }); break;
+          case "artifact_start": {
+            setArtifacts((prev) => {
+              const ex = prev[ev.id];
+              if (ex) return { ...prev, [ev.id]: { ...ex, versions: [...ex.versions, { version: ex.versions.length + 1, content: "", createdAt: new Date().toISOString() }] } };
+              return { ...prev, [ev.id]: { id: ev.id, artifactType: ev.artifactType as Artifact["artifactType"], title: ev.title, versions: [{ version: 1, content: "", createdAt: new Date().toISOString() }] } };
+            });
+            setActiveArtifactId(ev.id);
+            break;
+          }
+          case "artifact_delta": {
+            setArtifacts((prev) => {
+              const art = prev[ev.id];
+              if (!art) return prev;
+              const versions = [...art.versions];
+              const last = versions[versions.length - 1];
+              versions[versions.length - 1] = { ...last, content: last.content + ev.chunk };
+              return { ...prev, [ev.id]: { ...art, versions } };
+            });
+            break;
+          }
+          case "artifact_end": break;
           case "done": break;
         }
       }
@@ -371,14 +395,14 @@ export default function App({ namespace }: { namespace: string }) {
     );
   }, [isEmpty]);
 
-  // FIX 2b: switching chats aborts any running stream so no generation
-  // state or handler bleeds into the new session.
+  // Switching chats does NOT abort the previous generation — it keeps
+  // running in the background. streamingActive is scoped to activeId, so
+  // the new chat shows "Send" while the old one continues to stream.
   const switchChat = useCallback((id: string | null) => {
-    if (id !== activeId) abortRef.current?.abort();
     setActiveId(id);
     setSearch("");
     setMobileNav(false);
-  }, [activeId]);
+  }, []);
   // Wipe every client slice (storage + memory) so the next session starts
   // clean. Called on sign-out AND before hydrating a new sign-in.
   const wipeClientState = useCallback(() => {
@@ -574,6 +598,9 @@ export default function App({ namespace }: { namespace: string }) {
       )}
       {panel === "admin" && authUser?.isAdmin && (
         <AdminPanel token={loadToken() || ""} authUserId={authUser.id} onRefreshSelf={refreshSelf} onClose={() => setPanel(null)} onToast={toast} />
+      )}
+      {activeArtifactId && artifacts[activeArtifactId] && (
+        <ArtifactPanel artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
       )}
 
       <div className="toasts">

@@ -112,13 +112,29 @@ const isSep = (t: string) => {
 };
 const cells = (t: string) => t.trim().replace(/^#+\s*/, "").replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
 
+function InlineViz({ type, raw }: { type: string; raw: string }) {
+  try {
+    if (type === "mermaid") return <Mermaid code={raw} />;
+    if (type === "chart") return <ChartBlock code={raw} />;
+    if (type === "svg") {
+      // sanitize: strip scripts, events, external refs — never execute viz code in app DOM directly
+      const sanitized = raw.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\son\w+="[^"]*"/gi, "").replace(/\son\w+='[^']*'/gi, "");
+      if (!sanitized.trim().startsWith("<svg")) throw new Error("not svg");
+      return <div className="inline-viz" dangerouslySetInnerHTML={{ __html: sanitized }} />;
+    }
+    return null;
+  } catch {
+    return <pre className="viz-fallback"><code>{raw}</code></pre>;
+  }
+}
+
 function renderTable(headers: string[], rows: string[][], srcs?: Source[]): string {
   const th = headers.map((h) => `<th>${inline(h, srcs)}</th>`).join("");
   const tr = rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c, srcs)}</td>`).join("")}</tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`;
 }
 
-interface Block { type: "code" | "html" | "mermaid" | "chart"; lang: string; content: string; }
+interface Block { type: "code" | "html" | "mermaid" | "chart" | "viz"; lang: string; content: string; vizType?: string }
 
 interface ChartAnnotation { x: string; label: string }
 interface ChartSpec { type: "bar" | "line" | "pie"; labels: string[]; values: number[]; title?: string; annotations?: ChartAnnotation[] }
@@ -126,7 +142,9 @@ interface ChartSpec { type: "bar" | "line" | "pie"; labels: string[]; values: nu
 function ChartBlock({ code }: { code: string }) {
   let spec: ChartSpec | null = null;
   try {
-    const j = JSON.parse(code);
+    let j = JSON.parse(code);
+    // Support both {labels,values} and {data:{labels,values}} shapes (viz:chart uses data wrapper)
+    if (j && j.data && Array.isArray(j.data.labels)) j = { type: j.type, labels: j.data.labels, values: j.data.values, title: j.title, annotations: j.annotations };
     if (j && (j.type === "bar" || j.type === "line" || j.type === "pie") &&
         Array.isArray(j.labels) && Array.isArray(j.values) && j.labels.length > 0) {
       const n = Math.min(j.labels.length, j.values.length, 8);
@@ -250,7 +268,12 @@ function parse(md: string, srcs?: Source[]): Block[] {
       const nl = parts[i].indexOf("\n");
       const lang = (nl === -1 ? "" : parts[i].slice(0, nl)).trim().toLowerCase();
       const code = (nl === -1 ? parts[i] : parts[i].slice(nl + 1)).replace(/\n$/, "");
-      out.push({ type: lang === "mermaid" ? "mermaid" : lang === "chart-data" ? "chart" : "code", lang, content: code });
+      let type: Block["type"] = "code";
+      let vizType: string | undefined;
+      if (lang === "mermaid" || lang === "viz:mermaid") type = "mermaid";
+      else if (lang === "chart-data" || lang === "viz:chart") type = "chart";
+      else if (lang === "viz:svg" || lang === "viz:html") { type = "viz"; vizType = lang.split(":")[1]; }
+      out.push({ type, lang, content: code, vizType });
       continue;
     }
     const html = renderLines(parts[i], srcs);
@@ -307,6 +330,7 @@ export default function Markdown({ text, sources }: { text: string; sources?: So
       {blocks.map((b, i) =>
         b.type === "mermaid" ? <Mermaid key={i} code={b.content} />
         : b.type === "chart" ? <ChartBlock key={i} code={b.content} />
+        : b.type === "viz" ? <InlineViz key={i} type={b.vizType || "svg"} raw={b.content} />
         : b.type === "code" ? <CodeBlock key={i} lang={b.lang} code={b.content} />
         : <div key={i} dangerouslySetInnerHTML={{ __html: b.content }} />
       )}

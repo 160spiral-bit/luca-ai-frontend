@@ -23,6 +23,11 @@ export interface Settings {
   personality: { creativity: number; formality: number; verbosity: number };
 }
 export interface Profile { name: string; persona: string | null; theme: "dark" | "light"; avatar: string | null; complete?: boolean; }
+export interface ArtifactVersion { version: number; content: string; createdAt: string; }
+export interface Artifact { id: string; artifactType: "code" | "markdown" | "html" | "svg" | "mermaid"; title: string; versions: ArtifactVersion[]; }
+export function appendArtifactVersion(artifact: Artifact, content: string): Artifact {
+  return { ...artifact, versions: [...artifact.versions, { version: artifact.versions.length + 1, content, createdAt: new Date().toISOString() }] };
+}
 export interface AuthUser {
   id: string; email: string; name: string; username: string; provider: string;
   avatar?: string | null; verified?: boolean; isAdmin?: boolean;

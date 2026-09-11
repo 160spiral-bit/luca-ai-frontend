@@ -92,46 +92,56 @@ function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: st
 
 const SUGGESTIONS = ["Create an image of a city at sunset", "Explain a tricky idea simply", "Help me write better code"];
 
-function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?: string; streaming?: boolean; thinkingMs?: number; stageLabel?: string }) {
-  const [open, setOpen] = useState(false);
-  const [shown, setShown] = useState(stageLabel || "");
-  const [visible, setVisible] = useState(true);
-  // Real backend stages only — crossfade when the reported stage changes.
-  // No invented loop: no stage reported means no status line at all.
+function ThinkingLabel({ label }: { label: string }) {
+  const [displayed, setDisplayed] = useState(label);
+  const [fading, setFading] = useState(false);
   useEffect(() => {
-    if (!streaming || !stageLabel || stageLabel === shown) {
-      if (stageLabel === shown) setVisible(true);
-      return;
-    }
-    setVisible(false);
-    const id = window.setTimeout(() => { setShown(stageLabel); setVisible(true); }, 250);
-    return () => window.clearTimeout(id);
-  }, [streaming, stageLabel, shown]);
+    if (label === displayed) return;
+    setFading(true);
+    const t = window.setTimeout(() => {
+      setDisplayed(label);
+      setFading(false);
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [label, displayed]);
+  useEffect(() => { if (!displayed && label) setDisplayed(label); }, [label, displayed]);
+  if (!displayed) return null;
+  return <span className={`thinking-status ${fading ? "thinking-status--fading" : ""}`}>{displayed}</span>;
+}
+
+export function ThinkingIndicator({ currentLabel, isDone, reasoningTrace }: { currentLabel: string; isDone: boolean; reasoningTrace: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+  useEffect(() => {
+    if (isDone) return;
+    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [isDone]);
+  return (
+    <div className="thinking">
+      <button className="thinking__header" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+        <span className={`thinking-label ${isDone ? "thinking-label--done" : ""}`}>{currentLabel}</span>
+        <span className="thinking__meta">{elapsed}s<ChevronDown size={14} className={`thinking__chevron ${expanded ? "thinking__chevron--open" : ""}`} /></span>
+      </button>
+      {expanded && reasoningTrace.length > 0 && (
+        <div className="thinking__trace">{reasoningTrace.map((line, i) => <p key={i} className="thinking__trace-line">{line}</p>)}</div>
+      )}
+    </div>
+  );
+}
+
+function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?: string; streaming?: boolean; thinkingMs?: number; stageLabel?: string }) {
   if (streaming) {
-    return (
-      <div className="thinking streaming" aria-label="Thinking">
-        <span className="thinking-spin"><Logo size={16} twinkle /></span>
-        <div className="thinking-text">
-          <span className="thinking-label">Thinking</span>
-          {shown ? <span className="thinking-status" style={{ opacity: visible ? 1 : 0 }}>{shown}</span> : null}
-        </div>
-      </div>
-    );
+    const trace = reasoning ? reasoning.split(/\n+/).filter(Boolean) : [];
+    const label = stageLabel || "Thinking…";
+    return <ThinkingIndicator currentLabel={label} isDone={false} reasoningTrace={trace} />;
   }
   if (!reasoning) return null;
   const secs = Math.max(1, Math.round((thinkingMs || 1000) / 1000));
-  const subtitle = thoughtSubtitle(reasoning);
-  return (
-    <div className="thought">
-      <button className="thought-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <Logo size={13} />
-        <span>Thought for {secs}s</span>
-        <ChevronDown size={14} className="thought-chev" style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }} />
-      </button>
-      {subtitle && <div className="thought-sub">{subtitle}</div>}
-      {open && <div className="thought-content">{reasoning}</div>}
-    </div>
-  );
+  const trace = reasoning.split(/\n+/).filter(Boolean);
+  // Done state: use the shimmer indicator in its completed form
+  return <ThinkingIndicator currentLabel={`Thought for ${secs}s`} isDone={true} reasoningTrace={trace} />;
 }
 
 function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft }: {
