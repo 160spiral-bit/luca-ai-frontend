@@ -125,7 +125,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
           <input ref={fileRef} type="file" multiple hidden
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
           <button className="circle-btn" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Add files — or just paste a screenshot"><Plus size={19} /></button>
-          <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)}
+          <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               if (!coarse && settings.enterToSend && !e.shiftKey) { e.preventDefault(); doSend(); }

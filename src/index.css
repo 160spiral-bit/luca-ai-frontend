@@ -348,7 +348,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .composer:focus-within { border-color: var(--line-strong); }
 .composer textarea {
   flex: 1; min-width: 0; resize: none; background: none; border: none;
-  padding: 0; margin: 0 2px 0 0; font-size: 15px; line-height: 1.2; max-height: 200px;
+  padding: 4px 0; margin: 0 2px 0 0; font-size: 15px; line-height: 1.2; max-height: 200px;
   box-sizing: border-box; outline: none !important;
   scrollbar-width: thin; scrollbar-color: var(--surface-3) transparent;
 }
