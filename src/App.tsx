@@ -332,7 +332,13 @@ export default function App({ namespace }: { namespace: string }) {
     const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
     const id = sid;
     setSessions((p) => p.map((s) => (s.id === id ? { ...s, updatedAt: Date.now(), messages: [...s.messages, userMsg, asstMsg] } : s)));
-    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), { role: "user", content: userMsg.content }], text, tier, baseMsgs.length === 0);
+    // New turn must carry its images as image_url parts (not a plain string),
+    // otherwise the thumbnail renders locally but the model never receives them.
+    const newImgs = attachments.filter((a) => a.type.startsWith("image/"));
+    const newUserTurn: ChatMsg = newImgs.length
+      ? { role: "user", content: [{ type: "text", text: text + "\n[Attached: " + attachments.map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
+      : { role: "user", content: text };
+    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier, baseMsgs.length === 0);
   }, [activeId, activeSession, isStreaming, tier, runStream]);
 
   const regenerate = useCallback((sid: string, mu: string) => {
@@ -362,7 +368,11 @@ export default function App({ namespace }: { namespace: string }) {
     const userMsg: LucaMessage = { ...s.messages[idx], content: text, ts: Date.now() };
     const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, userMsg, asstMsg] } : x)));
-    void runStream(sid, asstMsg.uid, [...toHistory(before), { role: "user", content: text }], text, tier, false);
+    const editImgs = (userMsg.attachments || []).filter((a) => a.type.startsWith("image/"));
+    const editUserTurn: ChatMsg = editImgs.length
+      ? { role: "user", content: [{ type: "text", text }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
+      : { role: "user", content: text };
+    void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier, false);
   }, [sessions, isStreaming, tier, runStream]);
 
   const setVersion = useCallback((sid: string, mu: string, i: number) => {
