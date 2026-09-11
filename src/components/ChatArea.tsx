@@ -245,11 +245,8 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
         )}
         {isLast && !msg.streaming && msg.followups && msg.followups.length > 0 && (
           <div className="followups">
-            {msg.followups.map((s) => (
-              <button key={s} className="followup-chip" onClick={() => onSelect(s)}>
-                <span>{s}</span>
-                <ArrowRight size={16} style={{ color: "#8FA8FF", flexShrink: 0 }} />
-              </button>
+            {msg.followups.slice(0, 3).map((s) => (
+              <button key={s} className="followup-chip" onClick={() => onSelect(s)}>{s}</button>
             ))}
           </div>
         )}

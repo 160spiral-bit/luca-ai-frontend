@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Mermaid } from "./Markdown";
 import type { Artifact } from "../lib/store";
 
 function CodeView({ code, language }: { code: string; language: string }) {
@@ -12,8 +13,8 @@ function ArtifactPreview({ type, content }: { type: string; content: string }) {
     // simple markdown fallback — reuse same container styling
     return <div style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 14 }}>{content}</div>;
   }
-  if (type === "mermaid") {
-    return <div style={{ padding: 16 }}><pre><code>{content}</code></pre></div>;
+  if (type === "mermaid" || content.trim().startsWith("xychart")) {
+    return <div style={{ padding: 16 }}><Mermaid code={content} /></div>;
   }
   return <CodeView code={content} language={type} />;
 }

@@ -46,33 +46,10 @@ function inline(t: string, srcs?: Source[]): string {
   return s;
 }
 
-declare global { interface Window { mermaid?: { render: (id: string, code: string) => Promise<{ svg: string }> } } }
+import mermaid from "mermaid";
+mermaid.initialize({ startOnLoad: false, theme: "dark", flowchart: { htmlLabels: true }, securityLevel: "loose" });
 
-function Mermaid({ code }: { code: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let dead = false;
-    (async () => {
-      try {
-        if (!window.mermaid) {
-          await new Promise<void>((res, rej) => {
-            let n = 0;
-            const t = setInterval(() => {
-              if (window.mermaid) { clearInterval(t); res(); }
-              else if (++n > 50) { clearInterval(t); rej(new Error("no mermaid")); }
-            }, 100);
-          });
-        }
-        const { svg } = await window.mermaid!.render("mmd-" + Math.random().toString(36).slice(2), code);
-        if (!dead && ref.current) ref.current.innerHTML = svg;
-      } catch { if (!dead) setFailed(true); }
-    })();
-    return () => { dead = true; };
-  }, [code]);
-  if (failed) return <pre><code>{code}</code></pre>;
-  return <div ref={ref} style={{ minHeight: 40, display: "flex", justifyContent: "center", overflowX: "auto" }} />;
-}
+export { Mermaid } from "./Mermaid";
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -114,16 +91,18 @@ const cells = (t: string) => t.trim().replace(/^#+\s*/, "").replace(/^\||\|$/g, 
 
 function InlineViz({ type, raw }: { type: string; raw: string }) {
   try {
+    // xychart-beta is mermaid syntax, not JSON — route it to Mermaid even if tagged as chart
+    if (raw.trim().startsWith("xychart-beta") || raw.trim().startsWith("xychart")) return <Mermaid code={raw} />;
     if (type === "mermaid") return <Mermaid code={raw} />;
     if (type === "chart") return <ChartBlock code={raw} />;
     if (type === "svg") {
-      // sanitize: strip scripts, events, external refs — never execute viz code in app DOM directly
       const sanitized = raw.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\son\w+="[^"]*"/gi, "").replace(/\son\w+='[^']*'/gi, "");
       if (!sanitized.trim().startsWith("<svg")) throw new Error("not svg");
       return <div className="inline-viz" dangerouslySetInnerHTML={{ __html: sanitized }} />;
     }
     return null;
-  } catch {
+  } catch (err) {
+    console.error("[viz] InlineViz failed:", err, "type:", type, "raw:", raw.slice(0, 300));
     return <pre className="viz-fallback"><code>{raw}</code></pre>;
   }
 }
@@ -140,10 +119,15 @@ interface ChartAnnotation { x: string; label: string }
 interface ChartSpec { type: "bar" | "line" | "pie"; labels: string[]; values: number[]; title?: string; annotations?: ChartAnnotation[] }
 
 function ChartBlock({ code }: { code: string }) {
+  // xychart-beta is mermaid, not JSON chart — delegate to Mermaid with logging
+  if (code.trim().startsWith("xychart-beta") || code.trim().startsWith("xychart")) {
+    console.warn("[viz] ChartBlock received xychart mermaid syntax, delegating to Mermaid:", code.slice(0, 80));
+    // @ts-ignore — render as mermaid instead of JSON chart
+    return <Mermaid code={code} />;
+  }
   let spec: ChartSpec | null = null;
   try {
     let j = JSON.parse(code);
-    // Support both {labels,values} and {data:{labels,values}} shapes (viz:chart uses data wrapper)
     if (j && j.data && Array.isArray(j.data.labels)) j = { type: j.type, labels: j.data.labels, values: j.data.values, title: j.title, annotations: j.annotations };
     if (j && (j.type === "bar" || j.type === "line" || j.type === "pie") &&
         Array.isArray(j.labels) && Array.isArray(j.values) && j.labels.length > 0) {
@@ -162,8 +146,13 @@ function ChartBlock({ code }: { code: string }) {
         spec = { type: j.type, labels, values, title: typeof j.title === "string" ? j.title : undefined, annotations };
       }
     }
-  } catch { /* fall through to code fallback */ }
-  if (!spec) return <pre><code>{code}</code></pre>;
+  } catch (err) {
+    console.error("[viz] ChartBlock JSON parse failed:", err, "code:", code.slice(0, 200));
+  }
+  if (!spec) {
+    console.error("[viz] ChartBlock invalid spec, falling back to code:", code.slice(0, 200));
+    return <pre><code>{code}</code></pre>;
+  }
   const W = 560, H = 300, padL = 40, padB = 30, padT = 16;
   const plotW = W - padL - 12, plotH = H - padT - padB;
   const max = Math.max(...spec.values, 0) || 1;
@@ -270,7 +259,7 @@ function parse(md: string, srcs?: Source[]): Block[] {
       const code = (nl === -1 ? parts[i] : parts[i].slice(nl + 1)).replace(/\n$/, "");
       let type: Block["type"] = "code";
       let vizType: string | undefined;
-      if (lang === "mermaid" || lang === "viz:mermaid") type = "mermaid";
+      if (lang === "mermaid" || lang === "viz:mermaid" || lang.startsWith("xychart") || lang === "viz:xychart" || lang === "viz:xychart-beta") type = "mermaid";
       else if (lang === "chart-data" || lang === "viz:chart") type = "chart";
       else if (lang === "viz:svg" || lang === "viz:html") { type = "viz"; vizType = lang.split(":")[1]; }
       out.push({ type, lang, content: code, vizType });
