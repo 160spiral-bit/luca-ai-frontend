@@ -45,6 +45,9 @@ export default function App({ namespace }: { namespace: string }) {
 
   const activeSession = sessions.find((s) => s.id === activeId) || null;
   const isStreaming = streaming !== null;
+  // FIX 2a: generation state is scoped to its session. The composer only
+  // shows "stop" when the running stream belongs to the open chat.
+  const streamingActive = !!streaming && streaming.sessionId === activeId;
   // Live mirrors for async callbacks (follow-ups) that outlive their closure.
   const sessionsRef = useRef(sessions);
   const activeIdRef = useRef(activeId);
@@ -366,6 +369,14 @@ export default function App({ namespace }: { namespace: string }) {
     );
   }, [isEmpty]);
 
+  // FIX 2b: switching chats aborts any running stream so no generation
+  // state or handler bleeds into the new session.
+  const switchChat = useCallback((id: string | null) => {
+    if (id !== activeId) abortRef.current?.abort();
+    setActiveId(id);
+    setSearch("");
+    setMobileNav(false);
+  }, [activeId]);
   // Wipe every client slice (storage + memory) so the next session starts
   // clean. Called on sign-out AND before hydrating a new sign-in.
   const wipeClientState = useCallback(() => {
@@ -503,7 +514,7 @@ export default function App({ namespace }: { namespace: string }) {
     <div className="app">
       <Sidebar
         sessions={sessions} activeId={activeId} search={search} onSearch={setSearch}
-        onSelect={setActiveId} onNew={() => { setActiveId(null); setSearch(""); }}
+        onSelect={(id) => switchChat(id)} onNew={() => switchChat(null)}
         onRename={(id, t) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, title: t } : s)))}
         onTogglePin={(id) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)))}
         onDelete={(id) => {
@@ -530,7 +541,7 @@ export default function App({ namespace }: { namespace: string }) {
             <span className="empty-icon"><Logo size={30} twinkle /></span>
             <h1>What are you working on?</h1>
             <div className="hero-input">
-              <Composer streaming={isStreaming} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
+              <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
                 tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} />
             </div>
             <div className="chips">
@@ -542,7 +553,7 @@ export default function App({ namespace }: { namespace: string }) {
             <ChatArea session={activeSession} profile={profile} settings={settings}
               onSuggestion={(t) => sendMessage(t, [])} onRegenerate={regenerate}
               onEditResend={editAndResend} onVersion={setVersion} onToast={toast} />
-            <Composer streaming={isStreaming} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
+            <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
               tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} />
           </>
         )}

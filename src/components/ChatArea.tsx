@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Check, ChevronDown, Copy, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, Check, ChevronDown, Copy, RefreshCw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
@@ -260,6 +260,17 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
   void profile;
   const threadRef = useRef<HTMLDivElement>(null);
   const prevKey = useRef("");
+  // Scroll-down pill: visible only when the user has scrolled well above the
+  // latest messages. Tapping glides back to the bottom.
+  const [stuck, setStuck] = useState(false);
+  const onThreadScroll = () => {
+    const el = threadRef.current;
+    if (!el) return;
+    setStuck(el.scrollHeight - el.scrollTop - el.clientHeight > 400);
+  };
+  const jumpToBottom = () => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+  };
   useEffect(() => {
     const el = threadRef.current;
     if (!el || !settings.autoScroll || !session) return;
@@ -268,7 +279,10 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
     if (key === prevKey.current) return;
     prevKey.current = key;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 200;
-    if (nearBottom || (last && last.role === "assistant" && last.streaming)) el.scrollTop = el.scrollHeight;
+    if (nearBottom || (last && last.role === "assistant" && last.streaming)) {
+      el.scrollTop = el.scrollHeight;
+      setStuck(false);
+    }
   }, [session, settings.autoScroll]);
   if (!session || session.messages.length === 0) {
     return (
@@ -285,10 +299,17 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
     );
   }
   return (
-    <div className="thread thread-in" key="thread" ref={threadRef}><div className="thread-inner">
+    <div className="thread-wrap">
+      <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
       {session.messages.map((m, i) => m.role === "user"
         ? <UserMsg key={m.uid} msg={m} session={session} onEditResend={onEditResend} />
         : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} />)}
-    </div></div>
+      </div></div>
+      {stuck && (
+        <button className="jump-btn" onClick={jumpToBottom} aria-label="Scroll to latest messages">
+          <ArrowDown size={17} />
+        </button>
+      )}
+    </div>
   );
 }

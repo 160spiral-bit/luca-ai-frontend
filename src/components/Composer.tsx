@@ -20,11 +20,15 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
   const fileRef = useRef<HTMLInputElement | null>(null);
   const recogRef = useRef<{ stop: () => void } | null>(null);
 
+  // FIX 1a: auto-resize as the user types up to MAX_H (200px); only past
+  // that does the textarea get its own internal scroll (overflow flips).
+  // Resetting to "auto" first lets it shrink again when text is deleted.
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
+    ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
+    ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
   }, [text]);
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !streaming;
