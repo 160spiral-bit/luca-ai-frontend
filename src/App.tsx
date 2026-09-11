@@ -40,6 +40,7 @@ export default function App({ namespace }: { namespace: string }) {
   const [guest, setGuestState] = useState(() => isGuest());
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const [composerDraft, setComposerDraft] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
 
@@ -245,6 +246,7 @@ export default function App({ namespace }: { namespace: string }) {
             break;
           case "tool-start": patchRound(sid, auid, ev.roundId, { name: ev.name, query: ev.query, status: "running" }); break;
           case "tool-end": patchRound(sid, auid, ev.roundId, { sources: ev.sources, status: "done", ms: ev.ms }); break;
+          case "error": patchMsg(sid, auid, { error: ev.message }); break;
           case "done": break;
         }
       }
@@ -431,6 +433,9 @@ export default function App({ namespace }: { namespace: string }) {
   const refreshSelf = useCallback(() => {
     refreshMe().then((u) => { if (u) { saveAuthUser(u); setAuthUser(u); } }).catch(() => {});
   }, []);
+  const handleEditDraft = useCallback((text: string) => {
+    setComposerDraft(text);
+  }, []);
 
   if (authLoading) {
     return <div className="center-page"><div className="spinner" /></div>;
@@ -542,7 +547,7 @@ export default function App({ namespace }: { namespace: string }) {
             <h1>What are you working on?</h1>
             <div className="hero-input">
               <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
-                tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} />
+                tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
             </div>
             <div className="chips">
               {HERO_SUGGESTIONS.map((s) => <button key={s} onClick={() => sendFromHero(s, [])}>{s}</button>)}
@@ -552,9 +557,9 @@ export default function App({ namespace }: { namespace: string }) {
           <>
             <ChatArea session={activeSession} profile={profile} settings={settings}
               onSuggestion={(t) => sendMessage(t, [])} onRegenerate={regenerate}
-              onEditResend={editAndResend} onVersion={setVersion} onToast={toast} />
+              onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} />
             <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
-              tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} />
+              tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
           </>
         )}
       </div>

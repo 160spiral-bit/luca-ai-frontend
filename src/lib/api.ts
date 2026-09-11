@@ -17,6 +17,7 @@ export type EngineEvent =
   | { kind: "tool-start"; roundId: string; name: string; query: string }
   | { kind: "tool-end"; roundId: string; sources: { title: string; url: string; host: string }[]; ms: number }
   | { kind: "meta"; model: string; provider: string; pinned?: boolean }
+  | { kind: "error"; message: string; code?: string; retryable?: boolean }
   | { kind: "reset" }
   | { kind: "done" };
 
@@ -72,7 +73,12 @@ export async function* streamChat(opts: {
         }
         const c = typeof j.content === "string" ? j.content : typeof j.reply === "string" ? j.reply : "";
         if (c) q.push({ kind: "content", text: c });
-        if (j.error && !c && typeof j.error === "string") q.push({ kind: "content", text: "\n\n_" + j.error + "_" });
+        if (j.error && typeof j.error === "string") {
+          // Prefer structured error event so the UI can show Retry / Edit actions.
+          // Only fall back to inline italic if no content was sent at all (legacy).
+          if (!c) q.push({ kind: "error", message: j.error, code: typeof j.code === "string" ? j.code : undefined, retryable: !!j.retryable });
+          else q.push({ kind: "content", text: "\n\n_" + j.error + "_" });
+        }
         if (Array.isArray(j.tool_calls)) {
           for (const tc of j.tool_calls) {
             if (tc?.function) {

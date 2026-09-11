@@ -9,11 +9,21 @@ const MAX_LEN = 200000;
 interface Props {
   streaming: boolean; onSend: (text: string, atts: Attachment[]) => void; onStop: () => void;
   tier: Tier; onTierChange: (t: Tier) => void; settings: Settings; onToast: (m: string) => void;
+  prefill?: string | null; onPrefillConsumed?: () => void;
 }
 
-export default function Composer({ streaming, onSend, onStop, tier, onTierChange, settings, onToast }: Props) {
+export default function Composer({ streaming, onSend, onStop, tier, onTierChange, settings, onToast, prefill, onPrefillConsumed }: Props) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  // Allow parent to push last user message back into the input for "Edit message"
+  useEffect(() => {
+    if (prefill != null && prefill !== "") {
+      setText(prefill);
+      requestAnimationFrame(() => taRef.current?.focus());
+      onPrefillConsumed?.();
+    }
+  }, [prefill, onPrefillConsumed]);
   const [dragOver, setDragOver] = useState(false);
   const [listening, setListening] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);

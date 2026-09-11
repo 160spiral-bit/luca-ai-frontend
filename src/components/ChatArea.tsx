@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowRight, Check, ChevronDown, Copy, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Copy, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
@@ -69,6 +69,25 @@ interface Props {
   onEditResend: (sid: string, uid: string, text: string) => void;
   onVersion: (sid: string, uid: string, i: number) => void;
   onToast: (m: string) => void;
+  onEditDraft: (text: string) => void;
+}
+
+function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: string; onRetry: () => void; onEditLastMessage: () => void }) {
+  return (
+    <div className="error-state">
+      <p className="error-state__message">{modelLabel} didn't return a response.</p>
+      <div className="error-state__actions">
+        <button className="error-action" onClick={onRetry}>
+          <RotateCcw size={15} strokeWidth={1.75} />
+          Retry
+        </button>
+        <button className="error-action" onClick={onEditLastMessage}>
+          <Pencil size={15} strokeWidth={1.75} />
+          Edit message
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const SUGGESTIONS = ["Create an image of a city at sunset", "Explain a tricky idea simply", "Help me write better code"];
@@ -115,12 +134,13 @@ function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?
   );
 }
 
-function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect }: {
+function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft }: {
   msg: LucaMessage; session: Session; isLast: boolean;
   onRegenerate: (sid: string, uid: string) => void;
   onVersion: (sid: string, uid: string, i: number) => void;
   onToast: (m: string) => void;
   onSelect: (text: string) => void;
+  onEditDraft: (text: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const versions = msg.versions || [];
@@ -135,6 +155,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
     while ((m = re.exec(display))) seen.add(Number(m[1]));
     return msg.sources.filter((s) => seen.has(s.id));
   })();
+  const isContentError = !!display && /The model didn't return a response|All models are rate-limited/i.test(display.trim());
   // While streaming with no content yet: ONLY the thinking indicator (single icon, no avatar).
   if (msg.streaming && !display) {
     return (
@@ -158,7 +179,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
           </div>
         ))}
         {msg.searchInfo && <SearchDisclosure info={msg.searchInfo} sources={msg.sources} />}
-        {display ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{display}</div>}><Markdown text={display} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
+        {isContentError ? null : display ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{display}</div>}><Markdown text={display} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
         {cited.length > 0 && (
           <div className="sources">
             <p className="sources-label">Sources</p>
@@ -172,7 +193,21 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
           </div>
         )}
         {msg.streaming && display ? <span className="cursor" aria-hidden="true" /> : null}
-        {msg.error && <div style={{ display: "flex", gap: 8, marginTop: 10, padding: "10px 14px", borderRadius: 12, border: "1px solid var(--line-strong)", fontSize: 13, color: "var(--danger)" }}><AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} /><span>{msg.error}</span></div>}
+        {(!!msg.error || isContentError) && !msg.streaming && (() => {
+          const modelLabel = msg.tier ? `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}` : "Luca";
+          const lastUserText = (() => {
+            const idx = session.messages.findIndex((m) => m.uid === msg.uid);
+            for (let i = idx - 1; i >= 0; i--) if (session.messages[i].role === "user") return session.messages[i].content;
+            return session.messages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
+          })();
+          return (
+            <ErrorState
+              modelLabel={modelLabel}
+              onRetry={() => onRegenerate(session.id, msg.uid)}
+              onEditLastMessage={() => onEditDraft(lastUserText)}
+            />
+          );
+        })()}
         {msg.interrupted && !msg.streaming && (
           <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Stopped.</span>
