@@ -143,9 +143,9 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
             }}
             placeholder="Ask Luca anything" aria-label="Message Luca" />
           <button className={`pro-btn ${isPro ? "on" : ""}`} onClick={() => onTierChange(isPro ? "flash" : "pro")} aria-pressed={isPro} title="Toggle Pro reasoning">
-            <Brain size={14} />Pro
+            <Brain size={14} /><span>Pro</span>
           </button>
-          <button className="circle-btn" onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" style={listening ? { color: "var(--danger)" } : undefined}>
+          <button className="circle-btn mic-btn" onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" style={listening ? { color: "var(--danger)" } : undefined}>
             <Mic size={17} />
           </button>
           {streaming ? (
@@ -158,7 +158,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
             </button>
           )}
         </div>
-        <div className="fineprint">I can get things wrong — double-check the important stuff.</div>
+        <div className="fineprint">luca can make mistakes. double check the important stuff</div>
       </div>
     </div>
   );

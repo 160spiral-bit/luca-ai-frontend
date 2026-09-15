@@ -16,7 +16,7 @@ export function Landing({ onEnter }: { onEnter: () => void }) {
       <div className="landing-hero">
         <div className="brand-mark"><Logo size={26} /></div>
         <h1>Chat with the fastest models alive.</h1>
-        <p>Quick answers, deep thinking when you need it — you just talk.</p>
+        <p>Flash answers, deep thinking when you need it — you just talk.</p>
         <button className="btn-primary" style={{ width: "auto", padding: "13px 38px", fontSize: 15 }} onClick={onEnter}>Start chatting</button>
         <div className="status-dots">
           <span><i className={counts && counts.flash ? "" : "down"} />Flash · {counts ? counts.flash ?? 0 : "…"} models</span>
@@ -35,7 +35,7 @@ export function About() {
         <h1 style={{ fontSize: 36, letterSpacing: "-0.02em", margin: "26px 0 12px" }}>About Luca AI</h1>
         <p style={{ color: "var(--ink-2)", lineHeight: 1.75 }}>
           Luca is a fast, private AI chat with a Pro reasoning toggle and image generation.
-          Quick answers up front, deeper thinking on demand.
+          Flash answers up front, deeper thinking on demand.
         </p>
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <a href="./chat.html" className="btn-primary" style={{ width: "auto", padding: "11px 26px", textDecoration: "none" }}>Open chat</a>

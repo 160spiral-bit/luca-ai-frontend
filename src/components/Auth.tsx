@@ -19,7 +19,7 @@ function GoogleIcon() {
 
 function GithubIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.4-5.27 5.69.42.36.78 1.07.78 2.15 0 1.56-.01 2.81-.01 3.19 0 .3.2.66.79.55A10.52 10.52 0 0023.5 12c0-6.35-5.15-11.5-11.5-11.5z" />
     </svg>
   );
@@ -38,15 +38,16 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
+  const [oauthLoaded, setOauthLoaded] = useState(false);
   const [checking, setChecking] = useState(false);
   const [avail, setAvail] = useState<{ available: boolean | null; reason: string | null }>({ available: null, reason: null });
-  const [imgOk, setImgOk] = useState(true);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     fetch(base() + "/api/auth/config").then((r) => r.json())
       .then((j) => setOauth({ google: !!j.google, github: !!j.github }))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOauthLoaded(true));
   }, []);
   useEffect(() => {
     const u = username.trim().toLowerCase();
@@ -151,11 +152,11 @@ export default function Auth({ onAuth, onGuest }: Props) {
   };
   const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); };
 
-  const oauthButtons = (
+  const oauthButtons = !oauthLoaded || (!oauth.google && !oauth.github) ? null : (
     <>
-      <button type="button" className="luca-btn" onClick={() => oauthGo("google")}><GoogleIcon />Continue with Google</button>
-      <button type="button" className="luca-btn" onClick={() => oauthGo("github")}><GithubIcon />Continue with GitHub</button>
-      <div className="luca-or"><div /><span>OR</span><div /></div>
+      {oauth.google && <button type="button" className="luca-btn" onClick={() => oauthGo("google")}><GoogleIcon />Continue with Google</button>}
+      {oauth.github && <button type="button" className="luca-btn" onClick={() => oauthGo("github")}><GithubIcon />Continue with GitHub</button>}
+      <div className="luca-or"><div /><span>or</span><div /></div>
     </>
   );
 
@@ -165,7 +166,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
         <div className="luca-auth-inner">
           <div className="luca-brand"><Logo size={20} /><span>Luca</span></div>
           <h1 className="luca-headline">Think further</h1>
-          <p className="luca-sub">Your next-gen, free AI agent.</p>
+          <p className="luca-sub">Next-generation intelligence for engineering, reasoning, and research.</p>
           <div className="luca-card">
             {err && <div className="luca-err">{err}</div>}
             {ok && <div className="luca-ok">{ok}</div>}
@@ -175,10 +176,9 @@ export default function Auth({ onAuth, onGuest }: Props) {
                 <input className="luca-input" type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="username" aria-label="Email or username" />
                 <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" aria-label="Password" />
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Signing in…" : "Continue with email"}</button>
-                <div className="luca-row">
-                  <button type="button" className="luca-link" onClick={() => switchMode("forgot")}>Forgot password?</button>
-                  <button type="button" className="luca-link" onClick={() => switchMode("signup")}>No account? Sign up</button>
-                </div>
+                <p className="luca-signup-hint">
+                  Don't have an account? <button type="button" className="luca-link" onClick={() => switchMode("signup")}>Sign up</button>
+                </p>
               </form>
             )}
             {mode === "signup" && (
@@ -187,7 +187,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
                 <input className="luca-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" aria-label="Full name" />
                 <input className="luca-input" type="text" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="Pick a username" autoComplete="username" aria-label="Username" />
                 {(checking || avail.available !== null) && (
-                  <div style={{ fontSize: 12, color: avail.available === false ? "#e08080" : "#8fbf8f", marginTop: -8 }}>
+                  <div className={avail.available === false ? "luca-avail bad" : "luca-avail ok"}>
                     {checking ? "checking…" : avail.available === true ? "Username is available" : avail.reason || ""}
                   </div>
                 )}
@@ -234,14 +234,18 @@ export default function Auth({ onAuth, onGuest }: Props) {
                 </div>
               </form>
             )}
-            <button type="button" className="luca-guest" onClick={onGuest}>Continue as guest</button>
+            <div className="luca-or"><div /><span>Explore instantly</span><div /></div>
+            <button type="button" className="luca-guest-btn" onClick={onGuest}>
+              Continue as Guest
+              <span className="luca-guest-hint">No sign-in needed · Local device storage</span>
+            </button>
           </div>
-          <p className="luca-micro">By continuing, you agree to Luca's <a href="./about.html">Terms</a> and <a href="./about.html">Privacy Policy</a>.</p>
+          <p className="luca-micro">By continuing, you agree to Luca's <a href="./about.html">Terms of Service</a> and <a href="./about.html">Privacy Policy</a>.</p>
         </div>
       </div>
       <div className="luca-auth-right">
-        <div className="luca-photo">
-          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" onError={() => setImgOk(false)} />}
+        <div className="luca-photo luca-photo-art" aria-hidden="true">
+          <span className="luca-photo-orb" />
         </div>
       </div>
     </div>

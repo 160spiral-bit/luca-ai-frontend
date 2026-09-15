@@ -3,52 +3,7 @@ import { ArrowDown, ArrowRight, Check, ChevronDown, Copy, Pencil, RefreshCw, Rot
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
-import type { LucaMessage, Session, Settings, Profile, Source, SearchInfo } from "../lib/store";
-
-const SEARCH_WHY: Record<string, string> = {
-  explicit_search_request: "You asked me to look this up.",
-  temporal_language: "Your question is about something current.",
-  time_sensitive_subject: "This topic changes over time.",
-  user_requests_evidence: "You asked for sourced evidence.",
-  high_stakes_factual: "This needs verified facts.",
-  current_ownership: "This asks who currently holds something.",
-  recent_events: "This is about recent events.",
-  entity_identification: "Identifying unfamiliar names first.",
-  creator_lookup: "Looking up who made this.",
-};
-
-function SearchDisclosure({ info, sources }: { info: SearchInfo; sources?: Source[] }) {
-  const [open, setOpen] = useState(true);
-  const [inner, setInner] = useState(false);
-  return (
-    <div className="search-disclosure">
-      <button className="outer-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        Searched the web
-        <ChevronDown size={14} className="thought-chev" style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)" }} />
-      </button>
-      {open && (
-        <div className="outer-body">
-          <p className="reasoning">{SEARCH_WHY[info.reason] || "Checking live information."}</p>
-          <button className="inner-toggle" onClick={() => setInner((v) => !v)} aria-expanded={inner}>
-            <span>Results for “{info.query}” ({info.count})</span>
-            <ChevronDown size={13} className="thought-chev" style={{ transform: inner ? "rotate(0deg)" : "rotate(-90deg)" }} />
-          </button>
-          {inner && (
-            <div className="inner-body">
-              {(sources || []).map((s) => (
-                <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="source-row">
-                  <span className="num">{s.id}</span>
-                  <span className="domain">{s.domain}</span>
-                  <span className="title">{s.title}</span>
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import type { LucaMessage, Session, Settings, Profile, Source } from "../lib/store";
 
 // One-line subtitle derived from the actual reasoning content of this turn —
 // first substantial sentence, capped at 12 words. No category branching.
@@ -88,25 +43,6 @@ function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: st
       </div>
     </div>
   );
-}
-
-const SUGGESTIONS = ["Create an image of a city at sunset", "Explain a tricky idea simply", "Help me write better code"];
-
-function ThinkingLabel({ label }: { label: string }) {
-  const [displayed, setDisplayed] = useState(label);
-  const [fading, setFading] = useState(false);
-  useEffect(() => {
-    if (label === displayed) return;
-    setFading(true);
-    const t = window.setTimeout(() => {
-      setDisplayed(label);
-      setFading(false);
-    }, 150);
-    return () => window.clearTimeout(t);
-  }, [label, displayed]);
-  useEffect(() => { if (!displayed && label) setDisplayed(label); }, [label, displayed]);
-  if (!displayed) return null;
-  return <span className={`thinking-status ${fading ? "thinking-status--fading" : ""}`}>{displayed}</span>;
 }
 
 export function ThinkingIndicator({ currentLabel, isDone, reasoningTrace }: { currentLabel: string; isDone: boolean; reasoningTrace: string[] }) {
@@ -153,6 +89,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
   onEditDraft: (text: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [showSources, setShowSources] = useState(false);
   const versions = msg.versions || [];
   const showVersion = versions.length > 1 && !msg.streaming;
   const idx = msg.versionIndex ?? versions.length - 1;
@@ -183,23 +120,25 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
         {!msg.streaming && (
           <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
         )}
-        {msg.toolRounds?.map((r) => (
-          <div key={r.id} style={{ fontSize: 12.5, color: "var(--ink-3)", marginBottom: 8 }}>
-            Searched the web{r.query ? ` — “${r.query}”` : ""}{r.status === "done" && r.ms != null ? ` (${(r.ms / 1000).toFixed(1)}s)` : "…"}
-          </div>
-        ))}
-        {msg.searchInfo && <SearchDisclosure info={msg.searchInfo} sources={msg.sources} />}
+
         {isContentError ? null : display ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{display}</div>}><Markdown text={display} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
         {cited.length > 0 && (
-          <div className="sources">
-            <p className="sources-label">Sources</p>
-            {cited.map((s) => (
-              <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="source-row">
-                <span className="num">{s.id}</span>
-                <span className="domain">{s.domain}</span>
-                <span className="title">{s.title}</span>
-              </a>
-            ))}
+          <div className="sources-pill-wrap">
+            <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span>{cited.length} web {cited.length === 1 ? "page" : "pages"}</span>
+            </button>
+            {showSources && (
+              <div className="sources-dropdown">
+                {cited.map((s) => (
+                  <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="source-row">
+                    <span className="num">{s.id}</span>
+                    <span className="domain">{s.domain}</span>
+                    <span className="title">{s.title}</span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {msg.streaming && display ? <span className="cursor" aria-hidden="true" /> : null}
@@ -234,10 +173,10 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
             )}
             {showVersion && <span>v{idx + 1}/{versions.length}</span>}
             <span className="msg-actions">
-              <button className="icon-btn" style={{ width: 26, height: 26 }} aria-label="Copy" onClick={async () => { if (await copyText(display)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
+              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(display)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
                 {copied ? <Check size={13} /> : <Copy size={13} />}
               </button>
-              <button className="icon-btn" style={{ width: 26, height: 26 }} aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
+              <button className="icon-btn" aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
                 <RefreshCw size={13} />
               </button>
             </span>
@@ -266,8 +205,8 @@ function UserMsg({ msg, session, onEditResend }: {
     return (
       <div className="msg user">
         <div className="msg-body" style={{ maxWidth: "85%" }}>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3}
-            style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 12, padding: "10px 14px", fontSize: 15, resize: "vertical" }} />
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="edit-textarea"
+            style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 12, padding: "10px 14px", resize: "vertical" }} />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <button className="mini-btn" style={{ border: "1px solid var(--line)", borderRadius: 999, padding: "6px 14px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
             <button className="btn-primary" style={{ width: "auto", padding: "6px 18px", fontSize: 12 }} onClick={() => { if (draft.trim()) { onEditResend(session.id, msg.uid, draft.trim()); setEditing(false); } }}>Save</button>
@@ -285,10 +224,10 @@ function UserMsg({ msg, session, onEditResend }: {
         <div className="msg-bubble"><Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense></div>
         <div className="msg-meta">
           <span className="msg-actions">
-            <button className="icon-btn" style={{ width: 26, height: 26 }} aria-label="Copy" onClick={async () => { if (await copyText(msg.content)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
+            <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(msg.content)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
               {copied ? <Check size={13} /> : <Copy size={13} />}
             </button>
-            <button className="icon-btn" style={{ width: 26, height: 26 }} aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
+            <button className="icon-btn" aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
             </button>
           </span>
@@ -298,7 +237,7 @@ function UserMsg({ msg, session, onEditResend }: {
   );
 }
 
-export default function ChatArea({ session, profile, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast }: Props) {
+export default function ChatArea({ session, profile, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast, onEditDraft }: Props) {
   void profile;
   const threadRef = useRef<HTMLDivElement>(null);
   const prevKey = useRef("");
@@ -311,7 +250,8 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
     setStuck(el.scrollHeight - el.scrollTop - el.clientHeight > 400);
   };
   const jumpToBottom = () => {
-    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: reduce ? "auto" : "smooth" });
   };
   useEffect(() => {
     const el = threadRef.current;
@@ -327,25 +267,14 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
     }
   }, [session, settings.autoScroll]);
   if (!session || session.messages.length === 0) {
-    return (
-      <div className="thread" key="empty"><div className="thread-inner">
-        <div className="empty-state">
-          <span className="empty-icon"><Logo size={26} /></span>
-          <h1>Ready when you are.</h1>
-          <p className="subtitle">Ask anything — or start with one of these.</p>
-          <div className="chips">
-            {SUGGESTIONS.map((s) => <button key={s} onClick={() => onSuggestion(s)}>{s}</button>)}
-          </div>
-        </div>
-      </div></div>
-    );
+    return null;
   }
   return (
     <div className="thread-wrap">
       <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
       {session.messages.map((m, i) => m.role === "user"
         ? <UserMsg key={m.uid} msg={m} session={session} onEditResend={onEditResend} />
-        : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} />)}
+        : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />)}
       </div></div>
       {stuck && (
         <button className="jump-btn" onClick={jumpToBottom} aria-label="Scroll to latest messages">

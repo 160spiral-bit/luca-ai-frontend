@@ -57,7 +57,7 @@ function PersonalityField({ settings, onChange }: {
           {(["creativity", "formality", "verbosity"] as const).map((k) => (
             <div key={k} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
-                <span style={{ textTransform: "capitalize" }}>{k}</span><span style={{ color: "var(--ink-3)", fontFamily: "var(--mono)", fontSize: 11 }}>{settings.personality[k]}</span>
+                <span className="trait-name">{k}</span><span style={{ color: "var(--ink-3)", fontFamily: "var(--mono)", fontSize: 11 }}>{settings.personality[k]}</span>
               </div>
               <input type="range" min={0} max={100} value={settings.personality[k]}
                 onChange={(e) => onChange({ personality: { ...settings.personality, [k]: Number(e.target.value) } })} aria-label={k} />
@@ -267,11 +267,11 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
         <div className="stat"><b>{stats?.pendingSignups ?? "—"}</b><span>Pending</span></div>
       </div>
       <div className="field">
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}><Cpu size={13} /> Model routing <span className="admin-tag" style={{ marginLeft: "auto" }}>ADMIN ONLY</span></label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}><Cpu size={13} /> Model routing <span className="admin-tag" style={{ marginLeft: "auto" }}>Admin only</span></label>
         <select value={routing} onChange={(e) => changeRouting(e.target.value)} aria-label="Model routing"
-          style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 14px", fontSize: 13 }}>
-          <option value="flash">Luca Flash — default flash routing</option>
-          <option value="pro">Luca Pro — default pro routing</option>
+          style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 14px" }}>
+          <option value="flash">Luca Flash — default quick routing</option>
+          <option value="pro">Luca Pro — default deep routing</option>
           {models.map((m) => <option key={m.key} value={m.key}>{m.key} [{m.tiers.join("/")}]</option>)}
         </select>
         {test.state !== "idle" && (
@@ -290,7 +290,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
         )}
         {pending.map((u) => (
           <div key={u.id} className="user-row">
-            <div className="top"><span>@{u.username}</span><span className="admin-tag">PENDING</span></div>
+            <div className="top"><span>@{u.username}</span><span className="admin-tag">Pending</span></div>
             <div className="sub2">{u.name} · {u.email} · {u.provider}</div>
           </div>
         ))}
@@ -302,7 +302,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
                 <span>@{u.username}</span>
                 {b.includes("gold") && <span className="badge gold" title="Gold verified">✓</span>}
                 {b.includes("og") && <span className="badge og" title="OG verified">✓</span>}
-                {u.isAdmin && <span className="admin-tag">ADMIN</span>}
+                {u.isAdmin && <span className="admin-tag">Admin</span>}
               </div>
               <div className="sub2">{u.name} · {u.email} · {u.provider}</div>
               <div className="ops">

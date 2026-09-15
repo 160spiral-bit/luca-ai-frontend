@@ -19,7 +19,14 @@ import {
 } from "./lib/store";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
 
-const HERO_SUGGESTIONS = ["Draft an email", "Explain a tough concept", "Help me write code"];
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+
 
 export default function App({ namespace }: { namespace: string }) {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile());
@@ -397,11 +404,10 @@ export default function App({ namespace }: { namespace: string }) {
     const dx = from.left - to.left;
     const dy = from.top - to.top;
     if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-    const sx = from.width / to.width || 1;
-    const sy = from.height / to.height || 1;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     el.animate(
-      [{ transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`, transformOrigin: "top left" }, { transform: "none" }],
-      { duration: 380, easing: "cubic-bezier(.22,.8,.24,1)" }
+      [{ transform: `translate(${dx}px, ${dy}px)`, opacity: 0.4 }, { transform: "none", opacity: 1 }],
+      { duration: 320, easing: "cubic-bezier(.22,.8,.24,1)" }
     );
   }, [isEmpty]);
 
@@ -512,7 +518,7 @@ export default function App({ namespace }: { namespace: string }) {
         <div className="auth-card">
           <h1>What should I call you?</h1>
           <p className="sub">This helps me answer in a way that suits you. You can change it anytime in your profile.</p>
-          <div className="field"><label>Profile picture <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--ink-3)" }}>(optional)</span></label>
+          <div className="field"><label>Profile picture <span className="opt">(optional)</span></label>
             <label className="avatar" style={{ width: 64, height: 64, fontSize: 22, cursor: "pointer" }} title="Upload a profile picture">
               {avatarDraft ? <img src={avatarDraft} alt="" /> : (nameDraft.trim() ? nameDraft.trim()[0].toUpperCase() : "?")}
               <input type="file" accept="image/*" hidden onChange={(e) => {
@@ -568,6 +574,7 @@ export default function App({ namespace }: { namespace: string }) {
         collapsed={collapsed} onToggleSidebar={() => setCollapsed((v) => !v)}
       />
       <div className="main">
+        {!isEmpty && (
         <header className="topbar">
           <button className="icon-btn only-mobile" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
           {collapsed && (
@@ -575,16 +582,14 @@ export default function App({ namespace }: { namespace: string }) {
           )}
           <h1>{activeSession ? activeSession.title : "New chat"}</h1>
         </header>
+        )}
         {isEmpty ? (
           <div className="hero">
-            <span className="empty-icon"><Logo size={30} twinkle /></span>
-            <h1>What are you working on?</h1>
+            <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
+            <h1 className="hero-greeting">Hi{profile?.name ? ` ${profile.name}` : ""}, what's on your mind?</h1>
             <div className="hero-input">
               <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
                 tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
-            </div>
-            <div className="chips">
-              {HERO_SUGGESTIONS.map((s) => <button key={s} onClick={() => sendFromHero(s, [])}>{s}</button>)}
             </div>
           </div>
         ) : (

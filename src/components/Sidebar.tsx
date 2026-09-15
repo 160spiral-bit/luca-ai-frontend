@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
 import Logo from "./Logo";
-import { dayBucket } from "../lib/store";
 import type { Profile, Session } from "../lib/store";
 
 const initials = (name: string) =>
@@ -26,6 +25,12 @@ export default function Sidebar(p: Props) {
   const renameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (!p.mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") p.onCloseMobile(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); };
+  }, [p.mobileOpen, p.onCloseMobile]);
+  useEffect(() => {
     if (!menuFor) return;
     const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuFor(null); };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuFor(null); };
@@ -36,11 +41,8 @@ export default function Sidebar(p: Props) {
   useEffect(() => { if (renamingId) { renameRef.current?.focus(); renameRef.current?.select(); } }, [renamingId]);
 
   const q = p.search.trim().toLowerCase();
-  const filtered = q ? p.sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q))) : p.sessions;
-  const groups: Record<string, Session[]> = { Pinned: [], Today: [], Yesterday: [], "Previous 7 days": [], Older: [] };
-  for (const s of [...filtered].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))) {
-    (groups[s.pinned && !q ? "Pinned" : dayBucket(s.updatedAt || s.createdAt)] || groups.Older).push(s);
-  }
+  const visible = (q ? p.sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q))) : p.sessions)
+    .sort((a, b) => Number(b.pinned || false) - Number(a.pinned || false) || (b.updatedAt || 0) - (a.updatedAt || 0));
   const commitRename = () => { if (renamingId && renameValue.trim()) p.onRename(renamingId, renameValue.trim()); setRenamingId(null); };
 
   return (
@@ -54,7 +56,7 @@ export default function Sidebar(p: Props) {
           </div>
           <span style={{ flex: 1 }} />
           <button className="icon-btn only-desktop" onClick={p.onToggleSidebar} aria-label="Close sidebar"><PanelLeft size={15} /></button>
-          <button className="icon-btn only-mobile" onClick={p.onCloseMobile} aria-label="Close"><X size={16} /></button>
+          <button className="mobile-close-btn only-mobile" onClick={p.onCloseMobile} aria-label="Close sidebar"><X size={20} /></button>
         </div>
         <div className="side-actions">
           <button className="btn-new" onClick={() => { p.onNew(); p.onCloseMobile(); }}><Plus size={15} />New chat</button>
@@ -64,25 +66,23 @@ export default function Sidebar(p: Props) {
           <input value={p.search} onChange={(e) => p.onSearch(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
         </div>
         <nav className="recents" aria-label="Recent chats">
-          {p.sessions.length === 0 && <div style={{ padding: "24px 12px", fontSize: 13, color: "var(--ink-3)", lineHeight: 1.6 }}>no chats created yet</div>}
-          {Object.entries(groups).map(([g, list]) => list.length ? (
-            <div key={g}>
-              <div className="recents-label">{g === "Pinned" ? <Pin size={9} style={{ marginRight: 4 }} /> : null}{g}</div>
-              {list.map((s) => (
+          {p.sessions.length === 0 && <div className="recents-empty">No chats yet</div>}
+          {p.sessions.length > 0 && <div className="recents-label">Recents</div>}
+          {visible.map((s) => (
                 <div key={s.id} style={{ position: "relative" }}>
                   {renamingId === s.id ? (
                     <div style={{ display: "flex", gap: 4, padding: "2px 0" }}>
                       <input ref={renameRef} value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } if (e.key === "Escape") setRenamingId(null); }}
                         onBlur={commitRename} aria-label="Rename chat"
-                        style={{ flex: 1, minWidth: 0, borderRadius: 999, border: "1px solid var(--line-strong)", background: "var(--surface)", padding: "6px 12px", fontSize: 13 }} />
-                      <button className="icon-btn" style={{ width: 28, height: 28 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save"><Check size={13} /></button>
+                        style={{ flex: 1, minWidth: 0, borderRadius: 999, border: "1px solid var(--line-strong)", background: "var(--surface)", padding: "6px 12px" }} />
+                      <button className="icon-btn" style={{ width: 44, height: 44 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save"><Check size={15} /></button>
                     </div>
                   ) : (
                     <button className={`chat-row ${s.id === p.activeId ? "active" : ""}`} onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}>
                       <span className="title">{s.title}</span>
                       {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--ink-3)" }} />}
-                      <span role="button" tabIndex={0} aria-label="Chat options" className={`row-menu icon-btn ${menuFor === s.id ? "open" : ""}`} style={{ width: 24, height: 24, position: "static" }}
+                      <span role="button" tabIndex={0} aria-label="Chat options" className={`row-menu icon-btn ${menuFor === s.id ? "open" : ""}`}
                         onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); setConfirmDelete(null); }}
                         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); } }}>
                         <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
@@ -109,9 +109,7 @@ export default function Sidebar(p: Props) {
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          ) : null)}
+          ))}
         </nav>
         <div className="side-foot">
           {p.isAdmin && p.onOpenAdmin && (
