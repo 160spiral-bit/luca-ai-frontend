@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Toaster, toast as sonnerToast } from "sonner";
 import { Menu, PanelLeft } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
@@ -55,7 +56,6 @@ export default function App({ namespace }: { namespace: string }) {
   const [tier, setTier] = useState<Tier>(() => loadTier());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [streaming, setStreaming] = useState<{ sessionId: string; msgUid: string } | null>(null);
-  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([]);
   const [panel, setPanel] = useState<"settings" | "profile" | "admin" | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -85,10 +85,9 @@ export default function App({ namespace }: { namespace: string }) {
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { themeRef.current = settings.theme; }, [settings.theme]);
 
+  // Sonner toasts: persistent live region, real announcements, dismissable.
   const toast = useCallback((text: string) => {
-    const id = uid();
-    setToasts((p) => [...p.slice(-2), { id, text }]);
-    window.setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 2400);
+    sonnerToast(text, { duration: 2400 });
   }, []);
   // Wipe every client slice (storage + memory) so the next session starts
   // clean. Called on sign-out AND before hydrating a new sign-in. Defined
@@ -657,7 +656,8 @@ export default function App({ namespace }: { namespace: string }) {
         profile={profile} mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)}
         collapsed={collapsed} onToggleSidebar={() => setCollapsed((v) => !v)}
       />
-      <div className="main">
+      <a href="#main" className="skip-link">Skip to chat</a>
+      <div className="main" id="main">
         {!isEmpty && (
         <header className="topbar">
           <button className="icon-btn only-mobile" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
@@ -704,9 +704,7 @@ export default function App({ namespace }: { namespace: string }) {
         </Suspense>
       )}
 
-      <div className="toasts">
-        {toasts.map((t) => <div key={t.id} className="toast" role="status">{t.text}</div>)}
-      </div>
+      <Toaster position="bottom-center" theme={settings.theme === "light" ? "light" : "dark"} toastOptions={{ duration: 2400 }} />
     </div>
   );
 }

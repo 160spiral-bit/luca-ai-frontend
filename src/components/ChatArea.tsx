@@ -124,7 +124,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
     );
   }
   return (
-    <div className="msg">
+    <div className="msg" aria-busy={msg.streaming || undefined}>
       {!msg.reasoning && <span className="msg-avatar plain"><Logo size={16} /></span>}
       <div className="msg-body">
         {!msg.streaming && (
@@ -313,11 +313,22 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
   const renderMsg = (m: LucaMessage, i: number) => m.role === "user"
     ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} />
     : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} onOpenArtifact={onOpenArtifact} />;
+  // Screen-reader announcements for streaming — never on the message text
+  // itself (that would read every token).
+  const streaming = msgs.some((m) => m.streaming);
+  const wasStreaming = useRef(false);
+  const [announce, setAnnounce] = useState("");
+  useEffect(() => {
+    if (streaming && !wasStreaming.current) setAnnounce("Luca is responding");
+    else if (!streaming && wasStreaming.current) setAnnounce("Response complete");
+    wasStreaming.current = streaming;
+  }, [streaming]);
   if (!session || msgs.length === 0) {
     return null;
   }
   return (
     <div className="thread-wrap">
+      <div aria-live="polite" aria-atomic="true" className="sr-only">{announce}</div>
       <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
       {useVirtual ? (
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>

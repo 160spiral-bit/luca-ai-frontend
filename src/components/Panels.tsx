@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Check, Loader2, RefreshCw, Trash2, X, Cpu, XCircle, CheckCircle2 } from "lucide-react";
 import { adminStats, adminUsers, clearPending, getModels, testModel, updateAdminUser } from "../lib/api";
 import { downscaleImage } from "../lib/store";
 import type { AuthUser, Profile, Settings } from "../lib/store";
 
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Radix Dialog: focus trap, Escape, aria-modal, and focus restoration.
   return (
-    <>
-      <button className="scrim show" onClick={onClose} aria-label={`Close ${title}`} />
-      <div className="panel show" role="dialog" aria-label={title}>
-        <div className="panel-head"><h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={17} /></button></div>
-        <div className="panel-body">{children}</div>
-      </div>
-    </>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="scrim show" />
+        <Dialog.Content className="panel show" aria-label={title}>
+          <div className="panel-head"><h2>{title}</h2>
+            <Dialog.Close className="icon-btn" aria-label="Close"><X size={17} /></Dialog.Close></div>
+          <div className="panel-body">{children}</div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
