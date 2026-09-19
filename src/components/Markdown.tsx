@@ -46,10 +46,8 @@ function inline(t: string, srcs?: Source[]): string {
   return s;
 }
 
-import mermaid from "mermaid";
-mermaid.initialize({ startOnLoad: false, theme: "dark", flowchart: { htmlLabels: true }, securityLevel: "loose" });
-
-export { Mermaid } from "./Mermaid";
+import { Mermaid } from "./Mermaid";
+export { Mermaid };
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);

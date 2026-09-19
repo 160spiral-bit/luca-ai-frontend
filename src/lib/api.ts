@@ -179,3 +179,18 @@ export async function nameChat(userText: string, reply: string): Promise<string 
     return typeof j.title === "string" && j.title.trim() ? j.title.trim() : null;
   } catch { return null; }
 }
+export async function nameChatFromMessages(messages: ChatMsg[]): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 5000);
+    const r = await fetch(base() + "/api/name-chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(to);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return typeof j.title === "string" && j.title.trim() ? j.title.trim() : null;
+  } catch { return null; }
+}

@@ -8,7 +8,7 @@ import Auth from "./components/Auth";
 import ArtifactPanel from "./components/ArtifactPanel";
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
-import { followups, nameChat, refreshMe, streamChat, verifyToken } from "./lib/api";
+import { followups, nameChat, nameChatFromMessages, refreshMe, streamChat, verifyToken } from "./lib/api";
 import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
   clearAuth, clearDeviceState, confirmedUsername, defaultSettings, isGuest,
@@ -147,7 +147,10 @@ export default function App({ namespace }: { namespace: string }) {
     const token = loadToken();
     if (!token) return;
     fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/user/data", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r.status === 401) { clearAuth(); setAuthUser(null); setGuestState(false); return null; }
+        return r.ok ? r.json() : null;
+      })
       .then((j) => {
         if (myId !== authUser.id) return; // account changed mid-flight — discard
         const d = j?.data || {};
@@ -307,10 +310,29 @@ export default function App({ namespace }: { namespace: string }) {
     } finally {
       setStreaming(null);
       abortRef.current = null;
-    }
-    if (first) {
-      const title = (await nameChat(userText, acc)) || titleFromMessage(userText);
-      setSessions((cur) => cur.map((x) => (x.id === sid && x.title === "New chat" ? { ...x, title } : x)));
+      // External background agent: premise-established naming, uses LATEST sent message, not first.
+      // Fire-and-forget so it never blocks the chat turn.
+      void (async () => {
+        try {
+          if (!acc || acc.trim().length < 15) return;
+          const cur = sessionsRef.current.find((s) => s.id === sid);
+          if (!cur) return;
+          const isDefault = cur.title === "New chat";
+          const lastUserMsg = [...cur.messages].reverse().find((m) => m.role === "user");
+          const lastUserText = lastUserMsg ? lastUserMsg.content.trim() : userText;
+          const substantive = lastUserText.length > 12 && !/^(hi|hello|hey|hola|howdy|yo)[\s!.?]*$/i.test(lastUserText);
+          // If premise not yet established (greeting only), defer naming to next turn
+          if (isDefault && !substantive && cur.messages.length <= 2) return;
+          // Build history from latest messages (premise in latest, not first)
+          const hist: ChatMsg[] = cur.messages
+            .filter((m) => (m.role === "user" ? m.content : m.content || m.toolRounds?.length))
+            .slice(-6)
+            .map((m) => ({ role: m.role, content: m.content }));
+          if (hist.length === 0) hist.push({ role: "user", content: userText }, { role: "assistant", content: acc.slice(0, 500) });
+          const title = (await nameChatFromMessages(hist)) || titleFromMessage(lastUserText);
+          if (title) setSessions((p) => p.map((x) => (x.id === sid ? { ...x, title } : x)));
+        } catch {}
+      })();
     }
   }, [settings, profile, authUser, patchMsg, patchRound, commitVersion]);
 
