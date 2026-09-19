@@ -27,6 +27,45 @@ function GithubIcon() {
 
 type Mode = "signin" | "signup" | "verify" | "forgot" | "reset";
 
+// Owned brand visual: animated teal gradient mesh + grain. Zero network,
+// themes natively, no layout shift. Replaces the third-party stock photo.
+function AuthVisual() {
+  const [motionOK] = useState(() => {
+    try {
+      return !window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      return true;
+    }
+  });
+  return (
+    <svg className="auth-visual" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <radialGradient id="g1" cx="30%" cy="20%">
+          <stop offset="0%" stopColor="var(--teal-400)" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+        <radialGradient id="g2" cx="75%" cy="70%">
+          <stop offset="0%" stopColor="var(--teal-600)" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" />
+          <feColorMatrix type="saturate" values="0" />
+          <feComponentTransfer><feFuncA type="linear" slope="0.06" /></feComponentTransfer>
+        </filter>
+      </defs>
+      <rect width="600" height="800" fill="var(--bg)" />
+      <circle cx="180" cy="160" r="300" fill="url(#g1)">
+        {motionOK && <animate attributeName="cy" values="160;240;160" dur="14s" repeatCount="indefinite" />}
+      </circle>
+      <circle cx="450" cy="560" r="260" fill="url(#g2)">
+        {motionOK && <animate attributeName="cx" values="450;380;450" dur="18s" repeatCount="indefinite" />}
+      </circle>
+      <rect width="600" height="800" filter="url(#grain)" />
+    </svg>
+  );
+}
+
 export default function Auth({ onAuth, onGuest }: Props) {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
@@ -40,7 +79,6 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
   const [oauthLoaded, setOauthLoaded] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
   const [avail, setAvail] = useState<{ available: boolean | null; reason: string | null }>({ available: null, reason: null });
   const timer = useRef<number | undefined>(undefined);
 
@@ -252,7 +290,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
       </div>
       <div className="luca-auth-right">
         <div className="luca-photo">
-          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" onError={() => setImgOk(false)} />}
+          <AuthVisual />
         </div>
       </div>
     </div>

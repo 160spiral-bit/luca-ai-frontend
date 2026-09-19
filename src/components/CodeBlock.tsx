@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
+// Monospace ships with the lazy code chunk — the login page never fetches it.
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
 import { copyText } from "../lib/store";
 
 // Build-time-light, runtime-lazy highlighting. Only these languages ship;

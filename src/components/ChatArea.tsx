@@ -1,6 +1,6 @@
 import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
@@ -134,10 +134,10 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         {isContentError ? null : shown ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
         {cited.length > 0 && (
           <div className="sources-pill-wrap">
-            <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              <span>{cited.length} web {cited.length === 1 ? "page" : "pages"}</span>
-            </button>
+              <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
+                <Globe size={14} />
+                <span>{cited.length} web {cited.length === 1 ? "page" : "pages"}</span>
+              </button>
             {showSources && (
               <div className="sources-dropdown">
                 {cited.map((s) => (
@@ -262,7 +262,7 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend }: {
               {copied ? <Check size={13} /> : <Copy size={13} />}
             </button>
             <button className="icon-btn" aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+              <Pencil size={13} />
             </button>
           </span>
         </div>

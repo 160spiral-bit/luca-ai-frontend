@@ -1,19 +1,26 @@
 # Luca AI — frontend source (v2)
 
-React + Vite + TypeScript multi-page app (`index.html` → landing/auth, `chat.html` → chat, `about.html` → about) with Barba.js page transitions. This repo mirrors the working source on every change.
+React 18 + Vite 6 + TypeScript + strict `tsc`, ESLint, vitest. Single-page app
+with hash routes (`#/` home/landing, `#/chat`, `#/about`) — one `index.html`,
+no server rewrites needed. This repo is the source of truth.
 
 ## Layout
 
-- `src/main.tsx` — boots a React root per Barba container, with a MutationObserver fallback so transitions never strand a blank page.
-- `src/App.tsx` — all state: sessions, settings, tier, profile, auth, streaming, panels. Backend calls go through `src/lib/api.ts`.
-- `src/components/` — `Sidebar`, `ChatArea` (thread, thinking indicator, citations, sources, follow-up chips), `Composer` (input pill, attachments, voice), `Markdown` (lazy-loaded: GFM tables, KaTeX math, SVG charts, mermaid, code blocks), `Panels` (Settings/Profile/Admin), `Auth` (split-screen sign in/up/verify/forgot/reset), `Logo` (brand spark, optional JS twinkle).
-- `src/lib/store.ts` — types + localStorage keys (`luca-*`). `src/lib/api.ts` — SSE stream client (`EngineEvent`: reasoning/content/stage/sources/search-info/tool events/meta/done).
-- `src/barba.ts` — Barba + GSAP transitions. `src/index.css` — all styling (dark luxe + designed light theme).
+- `src/main.tsx` — single root, `HashRouter` + CSS route fade.
+- `src/App.tsx` — all state: sessions, settings, tier, profile, auth, streaming, panels. Backend calls go through `src/lib/api.ts` named functions.
+- `src/components/` — `Sidebar`, `ChatArea` (memoised thread, throttled streaming text, virtualised long threads, thinking indicator, citations, sources, follow-up chips), `Composer` (tall-mode input, attachments, voice), `Markdown` (sanitised react-markdown pipeline: GFM, KaTeX, shiki code, SVG charts, mermaid — all lazy), `Panels` (Settings/Profile/Admin behind Radix focus-trapped dialogs), `Auth` (split-screen sign in/up/verify/forgot/reset + owned SVG brand visual), `Logo` (brand spark, CSS twinkle).
+- `src/lib/store.ts` — types + storage: small prefs in localStorage (`luca-*`), sessions + artifacts in IndexedDB.
+- `src/index.css` — three-tier tokens (primitives → theme → components), dark luxe + light theme.
+- `public/404.html` — bounces legacy `chat.html`/`about.html` URLs back to the app.
 
 ## Backend contract
 
-`POST /api/chat` with `{ modelTier, messages, stream, tools, userSettings }` returns SSE `data:` lines (`content`, `reasoning`, `stage`+`label`, `sources`, `searchInfo`, `tool_calls`, `meta`, `[DONE]`). Auth is Bearer JWT (`luca-auth-token`). Per-account sync via `GET/POST /api/user/data`. Follow-ups via `POST /api/followups`.
+`POST /api/chat` with `{ modelTier, messages, stream, tools, userSettings }` returns spec SSE (`content`, `reasoning`, `stage`+`label`, `sources`, `searchInfo`, `tool_calls`, `meta`, `[DONE]`). Auth is Bearer JWT (`luca-auth-token`). Per-account sync via `GET/POST /api/user/data`. Follow-ups via `POST /api/followups`, naming via `POST /api/name-chat` (both require auth). Security notes in `docs/SECURITY.md`.
+
+## Scripts
+
+`npm run dev` · `npm run build` (typecheck + bundle) · `npm run typecheck` · `npm run lint` · `npm test` (vitest). CI runs all four on push/PR.
 
 ## Build / deploy
 
-`npm run build` → `dist/` (copied to the Render service repo root and the `luca-ai-web` GitHub Pages repo — those hold build output only; this repo is the source of truth).
+`npm run build` → `dist/` (copied to the `luca-ai-web` GitHub Pages repo + Vercel — those hold build output only).

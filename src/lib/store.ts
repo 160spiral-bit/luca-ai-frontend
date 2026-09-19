@@ -181,6 +181,14 @@ export const confirmedUsername = (id: string): boolean => {
 export const markUsernameConfirmed = (id: string) => {
   try { const m = JSON.parse(get(K.confirmed) || "{}"); m[id] = true; set(K.confirmed, JSON.stringify(m)); } catch { /* corrupted confirm map — dropped */ }
 };
+// Guest→signed-in adoption: guest work merges into the server record without
+// duplicating sessions that exist on both sides. Never another account's
+// data — callers only pass pre-login local state for a fresh account.
+export function mergeAdopted(srv: Session[], adopted: Session[], prev: Session[]): Session[] {
+  const localOnly = [...adopted, ...prev].filter((l) => !srv.some((s) => s.id === l.id));
+  return [...srv, ...localOnly];
+}
+
 export const titleFromMessage = (t: string) => {
   const c = t.replace(/\s+/g, " ").trim();
   if (c.length <= 44) return c || "New chat";

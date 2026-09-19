@@ -17,7 +17,7 @@ import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
   clearAuth, clearDeviceState, confirmedUsername, defaultSettings, downscaleImage, isGuest,
   loadActiveId, loadArtifacts, loadAuthUser, loadProfile, loadSessions,
-  loadSettings, loadTier, loadToken, markUsernameConfirmed,
+  loadSettings, loadTier, loadToken, markUsernameConfirmed, mergeAdopted,
   saveActiveId, saveArtifacts, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
@@ -218,8 +218,7 @@ export default function App({ namespace }: { namespace: string }) {
         const adopted = adoptRef.current || [];
         adoptRef.current = null;
         setSessions((prev) => {
-          const localOnly = [...adopted, ...prev].filter((l) => !srvSessions.some((s: Session) => s.id === l.id));
-          const merged = [...srvSessions, ...localOnly];
+          const merged = mergeAdopted(srvSessions, adopted, prev);
           void saveSessions(merged, storageFullToast);
           return merged;
         });
