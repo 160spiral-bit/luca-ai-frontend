@@ -24,12 +24,13 @@ export default function Sidebar(p: Props) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameRef = useRef<HTMLInputElement | null>(null);
 
+  const { mobileOpen, onCloseMobile } = p;
   useEffect(() => {
-    if (!p.mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") p.onCloseMobile(); };
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseMobile(); };
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("keydown", onKey); };
-  }, [p.mobileOpen, p.onCloseMobile]);
+  }, [mobileOpen, onCloseMobile]);
   useEffect(() => {
     if (!menuFor) return;
     const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuFor(null); };

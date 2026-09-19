@@ -431,6 +431,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .field { margin-bottom: 18px; }
 .field .opt { font-weight: 400; color: var(--ink-3); }
 .field label { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
+.field .flabel { display: block; font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
 .field input[type="text"], .field input[type="email"], .field input[type="password"], .field textarea, .field select {
   width: 100%; background: var(--surface); border: 1px solid var(--line);
   border-radius: 12px; padding: 10px 14px; font-size: 14px;

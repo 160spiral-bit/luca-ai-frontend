@@ -40,9 +40,9 @@ const K = {
   user: "luca-auth-user", guest: "luca-guest", confirmed: "luca-username-confirmed",
 };
 function get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
-function set(k: string, v: string) { try { localStorage.setItem(k, v); } catch {} }
-function del(k: string) { try { localStorage.removeItem(k); } catch {} }
-function parse<T>(raw: string | null, fb: T): T { try { return raw ? { ...fb, ...JSON.parse(raw) } as T : fb; } catch { return fb; } }
+// TODO(storage): surface QuotaExceededError to the user (Phase 2 moves sessions to IndexedDB).
+function set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* quota/full — surfaced in Phase 2 */ } }
+function del(k: string) { try { localStorage.removeItem(k); } catch { /* missing key — nothing to remove */ } }
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
@@ -56,7 +56,7 @@ export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personali
 // overwriting individual fields.
 export const clearDeviceState = () => {
   [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed].forEach(del);
-  try { sessionStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch { /* storage may be unavailable — device keys already removed */ }
 };
 export const loadSettings = (): Settings => {
   const raw = get(K.settings);
@@ -111,7 +111,7 @@ export const confirmedUsername = (id: string): boolean => {
   try { return !!JSON.parse(get(K.confirmed) || "{}")[id]; } catch { return false; }
 };
 export const markUsernameConfirmed = (id: string) => {
-  try { const m = JSON.parse(get(K.confirmed) || "{}"); m[id] = true; set(K.confirmed, JSON.stringify(m)); } catch {}
+  try { const m = JSON.parse(get(K.confirmed) || "{}"); m[id] = true; set(K.confirmed, JSON.stringify(m)); } catch { /* corrupted confirm map — dropped */ }
 };
 export const resetAll = () => [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user].forEach(del);
 

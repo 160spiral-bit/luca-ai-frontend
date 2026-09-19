@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, RefreshCw, ShieldCheck, Trash2, X, Cpu, XCircle, CheckCircle2 } from "lucide-react";
+import { Check, Loader2, RefreshCw, Trash2, X, Cpu, XCircle, CheckCircle2 } from "lucide-react";
 import { base } from "../lib/api";
 import type { AuthUser, Profile, Settings } from "../lib/store";
 
@@ -11,7 +11,7 @@ function Shell({ title, onClose, children }: { title: string; onClose: () => voi
   }, [onClose]);
   return (
     <>
-      <div className="scrim show" onClick={onClose} />
+      <button className="scrim show" onClick={onClose} aria-label={`Close ${title}`} />
       <div className="panel show" role="dialog" aria-label={title}>
         <div className="panel-head"><h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close"><X size={17} /></button></div>
@@ -75,14 +75,14 @@ export function SettingsPanel({ settings, onChange, onClose, onReset }: {
   const [confirm, setConfirm] = useState(false);
   return (
     <Shell title="Settings" onClose={onClose}>
-      <div className="field"><label>Theme</label>
+      <div className="field"><span className="flabel" id="theme-label">Theme</span>
         <div className="seg">
           {(["dark", "light"] as const).map((t) => (
             <button key={t} className={settings.theme === t ? "on" : ""} onClick={() => onChange({ theme: t })}>{t === "dark" ? "Dark" : "Light"}</button>
           ))}
         </div>
       </div>
-      <div className="field"><label>Behavior</label>
+      <div className="field"><span className="flabel" id="behavior-label">Behavior</span>
         <div className="switch-row">
           <div><div className="t">Enter to send</div><div className="d">Turn off to use Enter for new lines</div></div>
           <button role="switch" aria-checked={settings.enterToSend} className={`switch ${settings.enterToSend ? "on" : ""}`} onClick={() => onChange({ enterToSend: !settings.enterToSend })} aria-label="Enter to send" />
@@ -138,7 +138,7 @@ export function ProfilePanel({ profile, authUser, onSave, onClose, onLogout, onT
     <Shell title="Your profile" onClose={onClose}>
       <div className="modal-section avatar-row">
         <label className="avatar avatar-lg" title="Upload photo">
-          {avatar ? <img src={avatar} alt="" /> : (name.trim() ? name.trim()[0].toUpperCase() : "?")}
+          {avatar ? <img src={avatar} alt="" /> : (name.trim() ? name.trim().charAt(0).toUpperCase() : "?")}
           <input type="file" accept="image/*" hidden onChange={(e) => { pickFile(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
         <div style={{ minWidth: 0 }}>
@@ -267,8 +267,8 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
         <div className="stat"><b>{stats?.pendingSignups ?? "—"}</b><span>Pending</span></div>
       </div>
       <div className="field">
-        <label style={{ display: "flex", alignItems: "center", gap: 6 }}><Cpu size={13} /> Model routing <span className="admin-tag" style={{ marginLeft: "auto" }}>Admin only</span></label>
-        <select value={routing} onChange={(e) => changeRouting(e.target.value)} aria-label="Model routing"
+        <label htmlFor="model-routing" style={{ display: "flex", alignItems: "center", gap: 6 }}><Cpu size={13} /> Model routing <span className="admin-tag" style={{ marginLeft: "auto" }}>Admin only</span></label>
+        <select id="model-routing" value={routing} onChange={(e) => changeRouting(e.target.value)} aria-label="Model routing"
           style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "10px 14px" }}>
           <option value="flash">Luca Flash — default quick routing</option>
           <option value="pro">Luca Pro — default deep routing</option>

@@ -3,12 +3,11 @@ import { Menu, PanelLeft } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import Composer from "./components/Composer";
-import Logo from "./components/Logo";
 import Auth from "./components/Auth";
 import ArtifactPanel from "./components/ArtifactPanel";
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
-import { followups, nameChat, nameChatFromMessages, refreshMe, streamChat, verifyToken } from "./lib/api";
+import { followups, nameChatFromMessages, refreshMe, streamChat, verifyToken } from "./lib/api";
 import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
   clearAuth, clearDeviceState, confirmedUsername, defaultSettings, isGuest,
@@ -18,13 +17,6 @@ import {
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 // Inline document/code attachments as text blocks so the model actually
 // receives them. Images travel as image_url parts; everything else must be
@@ -73,17 +65,39 @@ export default function App({ namespace }: { namespace: string }) {
   // Live mirrors for async callbacks (follow-ups) that outlive their closure.
   const sessionsRef = useRef(sessions);
   const activeIdRef = useRef(activeId);
+  const themeRef = useRef(settings.theme);
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  useEffect(() => { themeRef.current = settings.theme; }, [settings.theme]);
 
   const toast = useCallback((text: string) => {
     const id = uid();
     setToasts((p) => [...p.slice(-2), { id, text }]);
     window.setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 2400);
   }, []);
+  // Wipe every client slice (storage + memory) so the next session starts
+  // clean. Called on sign-out AND before hydrating a new sign-in. Defined
+  // above the bootstrap effect so the dep array is honest.
+  const wipeClientState = useCallback(() => {
+    abortRef.current?.abort();
+    setStreaming(null);
+    clearDeviceState();
+    setSessions([]);
+    setActiveId(null);
+    const fresh = defaultSettings();
+    setSettings(fresh);
+    document.documentElement.setAttribute("data-theme", fresh.theme);
+    setTier("flash");
+    setProfile(null);
+    setNameDraft("");
+    setAvatarDraft(null);
+    setPanel(null);
+    setSearch("");
+    hydrated.current = false;
+  }, []);
 
   useEffect(() => {
-    const ping = () => { try { fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/health").catch(() => {}); } catch {} };
+    const ping = () => { try { fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/health").catch(() => { /* best-effort keep-alive */ }); } catch { /* best-effort keep-alive */ } };
     ping();
     const id = window.setInterval(ping, 60000);
     return () => window.clearInterval(id);
@@ -133,7 +147,7 @@ export default function App({ namespace }: { namespace: string }) {
       else { clearAuth(); setAuthUser(null); }
       setAuthLoading(false);
     }).catch(() => setAuthLoading(false));
-  }, [toast]);
+  }, [toast, wipeClientState]);
 
   useEffect(() => {
     window.clearTimeout(saveTimer.current);
@@ -198,7 +212,7 @@ export default function App({ namespace }: { namespace: string }) {
           const aName = (authUser.name || "").trim();
           const hasRealName = !!aName && aName !== "User" && !/^(googleuser|githubuser|user\d*)$/i.test(aName);
           if (hasRealName || authUser.avatar) {
-            const adopted = { name: hasRealName ? aName : "User", persona: null, theme: settings.theme, avatar: authUser.avatar || null };
+            const adopted = { name: hasRealName ? aName : "User", persona: null, theme: themeRef.current, avatar: authUser.avatar || null };
             setProfile(adopted); saveProfile(adopted);
           } else { setProfile(null); }
         }
@@ -246,7 +260,7 @@ export default function App({ namespace }: { namespace: string }) {
     }));
   }, []);
 
-  const runStream = useCallback(async (sid: string, auid: string, history: ChatMsg[], userText: string, t: Tier, first: boolean) => {
+  const runStream = useCallback(async (sid: string, auid: string, history: ChatMsg[], userText: string, t: Tier) => {
     const controller = new AbortController();
     abortRef.current = controller;
     setStreaming({ sessionId: sid, msgUid: auid });
@@ -286,6 +300,7 @@ export default function App({ namespace }: { namespace: string }) {
               if (!art) return prev;
               const versions = [...art.versions];
               const last = versions[versions.length - 1];
+              if (!last) return prev;
               versions[versions.length - 1] = { ...last, content: last.content + ev.chunk };
               return { ...prev, [ev.id]: { ...art, versions } };
             });
@@ -342,7 +357,7 @@ export default function App({ namespace }: { namespace: string }) {
           if (hist.length === 0) hist.push({ role: "user", content: userText }, { role: "assistant", content: acc.slice(0, 500) });
           const title = (await nameChatFromMessages(hist)) || titleFromMessage(lastUserText);
           if (title) setSessions((p) => p.map((x) => (x.id === sid ? { ...x, title } : x)));
-        } catch {}
+        } catch { /* background naming must never break the chat turn */ }
       })();
     }
   }, [settings, profile, authUser, patchMsg, patchRound, commitVersion]);
@@ -382,7 +397,7 @@ export default function App({ namespace }: { namespace: string }) {
     const newUserTurn: ChatMsg = newImgs.length
       ? { role: "user", content: [{ type: "text", text: fullText + "\n[Attached: " + attachments.filter((a) => a.type.startsWith("image/")).map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: fullText };
-    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier, baseMsgs.length === 0);
+    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier);
   }, [activeId, activeSession, isStreaming, tier, runStream]);
 
   const regenerate = useCallback((sid: string, mu: string) => {
@@ -395,11 +410,12 @@ export default function App({ namespace }: { namespace: string }) {
     const lastUser = [...before].reverse().find((m) => m.role === "user");
     if (!lastUser) return;
     const target = s.messages[idx];
+    if (!target) return;
     const prev = [...(target.versions || [])];
     if (target.content && !target.streaming && prev[prev.length - 1] !== target.content) prev.push(target.content);
     const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, fresh] } : x)));
-    void runStream(sid, mu, toHistory(before), lastUser.content, tier, false);
+    void runStream(sid, mu, toHistory(before), lastUser.content, tier);
   }, [sessions, isStreaming, tier, runStream]);
 
   const editAndResend = useCallback((sid: string, mu: string, text: string) => {
@@ -409,7 +425,9 @@ export default function App({ namespace }: { namespace: string }) {
     const idx = s.messages.findIndex((m) => m.uid === mu);
     if (idx < 0) return;
     const before = s.messages.slice(0, idx);
-    const userMsg: LucaMessage = { ...s.messages[idx], content: text, ts: Date.now() };
+    const orig = s.messages[idx];
+    if (!orig || !orig.uid) return;
+    const userMsg: LucaMessage = { ...orig, content: text, ts: Date.now() };
     const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, userMsg, asstMsg] } : x)));
     const editImgs = (userMsg.attachments || []).filter((a) => a.type.startsWith("image/"));
@@ -418,12 +436,8 @@ export default function App({ namespace }: { namespace: string }) {
     const editUserTurn: ChatMsg = editImgs.length
       ? { role: "user", content: [{ type: "text", text: editFullText }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: editFullText };
-    void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier, false);
+    void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier);
   }, [sessions, isStreaming, tier, runStream]);
-
-  const setVersion = useCallback((sid: string, mu: string, i: number) => {
-    setSessions((p) => p.map((s) => (s.id !== sid ? s : { ...s, messages: s.messages.map((m) => (m.uid === mu ? { ...m, versionIndex: i } : m)) })));
-  }, []);
 
   // Centered hero input -> docked composer FLIP on first message.
   const isEmpty = !activeSession || activeSession.messages.length === 0;
@@ -458,26 +472,6 @@ export default function App({ namespace }: { namespace: string }) {
     setSearch("");
     setMobileNav(false);
   }, []);
-  // Wipe every client slice (storage + memory) so the next session starts
-  // clean. Called on sign-out AND before hydrating a new sign-in.
-  const wipeClientState = useCallback(() => {
-    abortRef.current?.abort();
-    setStreaming(null);
-    clearDeviceState();
-    setSessions([]);
-    setActiveId(null);
-    const fresh = defaultSettings();
-    setSettings(fresh);
-    document.documentElement.setAttribute("data-theme", fresh.theme);
-    setTier("flash");
-    setProfile(null);
-    setNameDraft("");
-    setAvatarDraft(null);
-    setPanel(null);
-    setSearch("");
-    hydrated.current = false;
-  }, []);
-
   const handleAuth = useCallback((token: string, user: AuthUser) => {
     // New account on this device: wipe first, THEN hydrate from that
     // account's server record. Nothing survives from the previous session.
@@ -557,10 +551,10 @@ export default function App({ namespace }: { namespace: string }) {
         <div className="auth-card">
           <h1>What should I call you?</h1>
           <p className="sub">This helps me answer in a way that suits you. You can change it anytime in your profile.</p>
-          <div className="field"><label>Profile picture <span className="opt">(optional)</span></label>
-            <label className="avatar" style={{ width: 64, height: 64, fontSize: 22, cursor: "pointer" }} title="Upload a profile picture">
-              {avatarDraft ? <img src={avatarDraft} alt="" /> : (nameDraft.trim() ? nameDraft.trim()[0].toUpperCase() : "?")}
-              <input type="file" accept="image/*" hidden onChange={(e) => {
+          <div className="field"><span className="flabel" id="avatar-label">Profile picture <span className="opt">(optional)</span></span>
+            <label className="avatar" style={{ width: 64, height: 64, fontSize: 22, cursor: "pointer" }} title="Upload a profile picture" aria-labelledby="avatar-label">
+              {avatarDraft ? <img src={avatarDraft} alt="" /> : (nameDraft.trim() ? nameDraft.trim().charAt(0).toUpperCase() : "?")}
+              <input type="file" accept="image/*" hidden aria-label="Upload a profile picture" onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = "";
                 if (!f || !f.type.startsWith("image/")) return;
@@ -635,7 +629,7 @@ export default function App({ namespace }: { namespace: string }) {
           <>
             <ChatArea session={activeSession} profile={profile} settings={settings}
               onSuggestion={(t) => sendMessage(t, [])} onRegenerate={regenerate}
-              onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} />
+              onEditResend={editAndResend} onToast={toast} onEditDraft={handleEditDraft} />
             <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
               tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
           </>

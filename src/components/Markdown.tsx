@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -34,7 +34,7 @@ function inline(t: string, srcs?: Source[]): string {
   // Handles both [N] and model-emitted 【N†...】 footnote styles.
   if (srcs && srcs.length) {
     const byId = new Map(srcs.map((x) => [x.id, x]));
-    const bind = (m: string, n: string) => {
+    const bind = (_m: string, n: string) => {
       const src = byId.get(Number(n));
       if (!src) return "";
       const title = esc(`${src.domain} — ${src.title}`).replace(/"/g, "&quot;");
@@ -120,7 +120,6 @@ function ChartBlock({ code }: { code: string }) {
   // xychart-beta is mermaid, not JSON chart — delegate to Mermaid with logging
   if (code.trim().startsWith("xychart-beta") || code.trim().startsWith("xychart")) {
     console.warn("[viz] ChartBlock received xychart mermaid syntax, delegating to Mermaid:", code.slice(0, 80));
-    // @ts-ignore — render as mermaid instead of JSON chart
     return <Mermaid code={code} />;
   }
   let spec: ChartSpec | null = null;
@@ -139,7 +138,7 @@ function ChartBlock({ code }: { code: string }) {
             .filter((a: unknown) => a && typeof (a as ChartAnnotation).x !== "undefined" && typeof (a as ChartAnnotation).label === "string")
             .slice(0, 5)
             .map((a: ChartAnnotation) => ({ x: String(a.x), label: String(a.label).slice(0, 60) }));
-          if (!annotations.length) annotations = undefined;
+          if (annotations && !annotations.length) annotations = undefined;
         }
         spec = { type: j.type, labels, values, title: typeof j.title === "string" ? j.title : undefined, annotations };
       }
@@ -187,7 +186,7 @@ function ChartBlock({ code }: { code: string }) {
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
             <rect x={X(i) - bw / 2} y={Y(v)} width={bw} height={Math.max(padT + plotH - Y(v), 2)} rx={3} style={{ fill: "var(--ink-2)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i])}</text>
+            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
@@ -205,7 +204,7 @@ function ChartBlock({ code }: { code: string }) {
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
             <circle cx={X(i)} cy={Y(v)} r={3.5} style={{ fill: "var(--ink)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i])}</text>
+            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
@@ -251,10 +250,11 @@ function parse(md: string, srcs?: Source[]): Block[] {
   const out: Block[] = [];
   const parts = md.split("```");
   for (let i = 0; i < parts.length; i++) {
+    const part = parts[i] ?? "";
     if (i % 2 === 1) {
-      const nl = parts[i].indexOf("\n");
-      const lang = (nl === -1 ? "" : parts[i].slice(0, nl)).trim().toLowerCase();
-      const code = (nl === -1 ? parts[i] : parts[i].slice(nl + 1)).replace(/\n$/, "");
+      const nl = part.indexOf("\n");
+      const lang = (nl === -1 ? "" : part.slice(0, nl)).trim().toLowerCase();
+      const code = (nl === -1 ? part : part.slice(nl + 1)).replace(/\n$/, "");
       let type: Block["type"] = "code";
       let vizType: string | undefined;
       if (lang === "mermaid" || lang === "viz:mermaid" || lang.startsWith("xychart") || lang === "viz:xychart" || lang === "viz:xychart-beta") type = "mermaid";
@@ -263,7 +263,7 @@ function parse(md: string, srcs?: Source[]): Block[] {
       out.push({ type, lang, content: code, vizType });
       continue;
     }
-    const html = renderLines(parts[i], srcs);
+    const html = renderLines(parts[i] ?? "", srcs);
     if (html) out.push({ type: "html", lang: "", content: html });
   }
   return out;
@@ -280,17 +280,17 @@ function renderLines(text: string, srcs?: Source[]): string {
     if (p.length) { out.push("<p>" + p.map((l) => inline(l, srcs)).join("<br/>") + "</p>"); p = []; }
   };
   for (let i = 0; i < lines.length; i++) {
-    const t = lines[i].trimEnd();
+    const t = (lines[i] ?? "").trimEnd();
     const s = t.trim();
     if (!s) { flush(); continue; }
     const h = s.match(/^(#{1,3})\s+(.*)/);
-    if (h) { flush(); out.push(`<h${h[1].length}>${inline(h[2], srcs)}</h${h[1].length}>`); continue; }
+    if (h) { flush(); const hl = h[1]?.length ?? 1; out.push(`<h${hl}>${inline(h[2] ?? "", srcs)}</h${hl}>`); continue; }
     if (isTableLine(s)) {
       flush();
       const tl = [s];
-      while (i + 1 < lines.length && isTableLine(lines[i + 1].trim())) tl.push(lines[++i].trim());
-      if (tl.length >= 2 && isSep(tl[1])) {
-        const headers = cells(tl[0]);
+      while (i + 1 < lines.length && isTableLine((lines[i + 1] ?? "").trim())) tl.push((lines[++i] ?? "").trim());
+      if (tl.length >= 2 && isSep(tl[1] ?? "")) {
+        const headers = cells(tl[0] ?? "");
         const rows = tl.slice(2).map(cells).map((r) => {
           while (r.length < headers.length) r.push("");
           return r.slice(0, headers.length);
@@ -300,9 +300,9 @@ function renderLines(text: string, srcs?: Source[]): string {
       continue;
     }
     const um = s.match(/^[-*]\s+(.*)/);
-    if (um) { ol = []; q = []; p = []; ul.push(um[1]); continue; }
+    if (um) { ol = []; q = []; p = []; ul.push(um[1] ?? ""); continue; }
     const om = s.match(/^\d+\.\s+(.*)/);
-    if (om) { ul = []; q = []; p = []; ol.push(om[1]); continue; }
+    if (om) { ul = []; q = []; p = []; ol.push(om[1] ?? ""); continue; }
     if (s.startsWith("> ")) { ul = []; ol = []; p = []; q.push(s.slice(2)); continue; }
     ul = []; ol = []; q = []; p.push(s);
   }

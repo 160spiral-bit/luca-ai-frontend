@@ -1,28 +1,15 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
-import type { LucaMessage, Session, Settings, Profile, Source } from "../lib/store";
-
-// One-line subtitle derived from the actual reasoning content of this turn —
-// first substantial sentence, capped at 12 words. No category branching.
-function thoughtSubtitle(reasoning?: string): string | null {
-  if (!reasoning) return null;
-  const flat = reasoning.replace(/\s+/g, " ").trim();
-  if (!flat) return null;
-  const first = flat.split(/(?<=[.!?\n])\s+/).map((s) => s.trim()).find((s) => s.split(/\s+/).length >= 3);
-  if (!first) return null;
-  const words = first.replace(/^[•\-*#> ]+/, "").split(/\s+/).slice(0, 12);
-  return words.join(" ") + (first.split(/\s+/).length > 12 ? "…" : "");
-}
+import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
 
 interface Props {
   session: Session | null; profile: Profile | null; settings: Settings;
   onSuggestion: (t: string) => void;
   onRegenerate: (sid: string, uid: string) => void;
   onEditResend: (sid: string, uid: string, text: string) => void;
-  onVersion: (sid: string, uid: string, i: number) => void;
   onToast: (m: string) => void;
   onEditDraft: (text: string) => void;
 }
@@ -80,10 +67,9 @@ function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?
   return <ThinkingIndicator currentLabel={`Thought for ${secs}s`} isDone={true} reasoningTrace={trace} />;
 }
 
-function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft }: {
+function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, onEditDraft }: {
   msg: LucaMessage; session: Session; isLast: boolean;
   onRegenerate: (sid: string, uid: string) => void;
-  onVersion: (sid: string, uid: string, i: number) => void;
   onToast: (m: string) => void;
   onSelect: (text: string) => void;
   onEditDraft: (text: string) => void;
@@ -146,7 +132,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
           const modelLabel = msg.tier ? `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}` : "Luca";
           const lastUserText = (() => {
             const idx = session.messages.findIndex((m) => m.uid === msg.uid);
-            for (let i = idx - 1; i >= 0; i--) if (session.messages[i].role === "user") return session.messages[i].content;
+            for (let i = idx - 1; i >= 0; i--) { const m = session.messages[i]; if (m && m.role === "user") return m.content; }
             return session.messages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
           })();
           return (
@@ -173,7 +159,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, 
             )}
             {showVersion && <span>v{idx + 1}/{versions.length}</span>}
             <span className="msg-actions">
-              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(display)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
+              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(display ?? msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
                 {copied ? <Check size={13} /> : <Copy size={13} />}
               </button>
               <button className="icon-btn" aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
@@ -240,8 +226,7 @@ function UserMsg({ msg, session, onEditResend }: {
   );
 }
 
-export default function ChatArea({ session, profile, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast, onEditDraft }: Props) {
-  void profile;
+export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onToast, onEditDraft }: Props) {
   const threadRef = useRef<HTMLDivElement>(null);
   const prevKey = useRef("");
   // Scroll-down pill: visible only when the user has scrolled well above the
@@ -277,7 +262,7 @@ export default function ChatArea({ session, profile, settings, onSuggestion, onR
       <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
       {session.messages.map((m, i) => m.role === "user"
         ? <UserMsg key={m.uid} msg={m} session={session} onEditResend={onEditResend} />
-        : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />)}
+        : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />)}
       </div></div>
       {stuck && (
         <button className="jump-btn" onClick={jumpToBottom} aria-label="Scroll to latest messages">

@@ -15,7 +15,7 @@ function mount(el: Element) {
     ReactDOM.createRoot(el as HTMLElement).render(<About />);
     return;
   }
-  let target = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null) || (el as HTMLElement);
+  const target = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null) || (el as HTMLElement);
   if ((target as HTMLElement).dataset.booted === "1") return;
   (target as HTMLElement).dataset.booted = "1";
   mounted.add(el);

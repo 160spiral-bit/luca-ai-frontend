@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Mermaid } from "./Markdown";
-import type { Artifact } from "../lib/store";
+import type { Artifact, ArtifactVersion } from "../lib/store";
 
 function CodeView({ code, language }: { code: string; language: string }) {
   return <pre style={{ margin: 0, padding: 16, overflow: "auto" }}><code>{code}</code><div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>{language}</div></pre>;
@@ -30,7 +30,7 @@ function VersionScrubber({ versions, index, onChange }: { versions: Artifact["ve
 export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [versionIdx, setVersionIdx] = useState(artifact.versions.length - 1);
-  const version = artifact.versions[versionIdx] || artifact.versions[artifact.versions.length - 1];
+  const version: ArtifactVersion = artifact.versions[versionIdx] || artifact.versions[artifact.versions.length - 1] || { version: 0, content: "", createdAt: "" };
   // Keep index at latest when new version arrives
   if (versionIdx > artifact.versions.length - 1) setVersionIdx(artifact.versions.length - 1);
   return (

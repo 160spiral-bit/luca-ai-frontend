@@ -3,7 +3,7 @@ import { loadSettings, loadToken, uid } from "./store";
 import type { AuthUser, Settings, Source, Tier } from "./store";
 
 export const base = () => (loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com").replace(/\/+$/, "");
-const authHeaders = () => {
+const authHeaders = (): Record<string, string> => {
   const t = loadToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
@@ -104,7 +104,7 @@ export async function* streamChat(opts: {
           for (const tc of j.tool_calls) {
             if (tc?.function) {
               let query = "";
-              try { query = JSON.parse(tc.function.arguments || "{}").query || ""; } catch {}
+              try { query = JSON.parse(tc.function.arguments || "{}").query || ""; } catch { /* non-JSON tool args — query stays empty */ }
               q.push({ kind: "tool-start", roundId: tc.id || "call_" + uid(), name: tc.function.name || "", query });
             }
           }
@@ -169,7 +169,7 @@ export async function nameChat(userText: string, reply: string): Promise<string 
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 4000);
     const r = await fetch(base() + "/api/name-chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ userMessage: userText, assistantReply: reply }),
       signal: ctrl.signal,
     });
@@ -184,7 +184,7 @@ export async function nameChatFromMessages(messages: ChatMsg[]): Promise<string 
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);
     const r = await fetch(base() + "/api/name-chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ messages }),
       signal: ctrl.signal,
     });

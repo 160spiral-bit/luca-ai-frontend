@@ -35,8 +35,8 @@ export function initBarba(onEnter?: () => void) {
   });
   barba.init({
     transitions: [
-      { name: "fade", leave(d) { if (reduced()) return; return gsap.to(d.current.container, { autoAlpha: 0, y: -8, duration: LEAVE, ease: "power2.out", overwrite: true }); },
-        enter(d) { if (reduced()) return; return gsap.fromTo(d.next.container, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: ENTER, ease: EASE, overwrite: true, clearProps: "all" }); },
+      { name: "fade", leave(d: { current: { container: Element } }) { if (reduced()) return; return gsap.to(d.current.container, { autoAlpha: 0, y: -8, duration: LEAVE, ease: "power2.out", overwrite: true }); },
+        enter(d: { next: { container: Element } }) { if (reduced()) return; return gsap.fromTo(d.next.container, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: ENTER, ease: EASE, overwrite: true, clearProps: "all" }); },
         afterEnter() { onEnter?.(); } },
       { name: "home-chat", from: { namespace: ["home"] }, to: { namespace: ["chat"] }, ...slide(-14), afterEnter() { onEnter?.(); } },
       { name: "chat-home", from: { namespace: ["chat"] }, to: { namespace: ["home"] }, ...slide(14), afterEnter() { onEnter?.(); } },

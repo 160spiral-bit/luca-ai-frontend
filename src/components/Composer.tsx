@@ -74,7 +74,8 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
       const r = new FileReader();
       r.onload = () => {
         const raw = String(r.result || "");
-        const ctrl = (raw.match(/[\x00-\x08\x0E-\x1F\x7F]/g) || []).length;
+        // Intentional binary sniffing (NUL + C0 control chars).
+        const ctrl = (raw.match(/[\x00-\x08\x0E-\x1F\x7F]/g) || []).length; // eslint-disable-line no-control-regex
         const isBinary = raw.includes("\0") || (raw.length > 500 && ctrl / Math.max(1, raw.length) > 0.1);
         if (isBinary) {
           setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type || "application/octet-stream", size: f.size, dataUrl: "" }]);
