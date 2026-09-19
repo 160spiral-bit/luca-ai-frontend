@@ -8,7 +8,7 @@ import Auth from "./components/Auth";
 import { Landing } from "./pages";
 const ArtifactPanel = lazy(() => import("./components/ArtifactPanel"));
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
-import { barbaGo } from "./barba";
+import { useNavigate } from "react-router-dom";
 import {
   followups, getUserData, nameChatFromMessages, pingHealth, putUserData,
   refreshMe, setUsername, streamChat, verifySession, verifyToken,
@@ -540,21 +540,22 @@ export default function App({ namespace }: { namespace: string }) {
     setGuest(true); setGuestState(true); setAuthLoading(false);
     toast("You're browsing as a guest — chats stay on this device");
   }, [toast]);
+  const navigate = useNavigate();
   const logout = useCallback(() => {
     wipeClientState();
     clearAuth(); setGuest(false); setGuestState(false);
     setAuthUser(null);
     toast("Logged out");
-    window.setTimeout(() => barbaGo("index.html"), 250);
-  }, [toast, wipeClientState]);
+    window.setTimeout(() => navigate("/"), 250);
+  }, [toast, wipeClientState, navigate]);
   const resetEverything = useCallback(() => {
     abortRef.current?.abort();
     clearDeviceState(); clearAuth(); setGuest(false); setGuestState(false);
     setAuthUser(null); setSessions([]); setActiveId(null); setPanel(null);
     setTier("flash"); setProfile(null);
     document.documentElement.setAttribute("data-theme", "dark");
-    window.setTimeout(() => barbaGo("index.html"), 200);
-  }, []);
+    window.setTimeout(() => navigate("/"), 200);
+  }, [navigate]);
   const refreshSelf = useCallback(() => {
     refreshMe().then((u) => { if (u) { saveAuthUser(u); setAuthUser(u); } }).catch(() => { /* stay with cached user */ });
   }, []);

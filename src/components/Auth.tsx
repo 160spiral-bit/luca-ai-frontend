@@ -247,7 +247,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
               <span className="luca-guest-hint">No sign-in needed · Local device storage</span>
             </button>
           </div>
-          <p className="luca-micro">By continuing, you agree to Luca's <a href="./about.html">Terms of Service</a> and <a href="./about.html">Privacy Policy</a>.</p>
+          <p className="luca-micro">By continuing, you agree to Luca's <a href="#/about">Terms of Service</a> and <a href="#/about">Privacy Policy</a>.</p>
         </div>
       </div>
       <div className="luca-auth-right">

@@ -595,9 +595,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .thread::-webkit-scrollbar-track, .recents::-webkit-scrollbar-track, .panel-body::-webkit-scrollbar-track { background: transparent; }
 
-/* barba */
-[data-barba="wrapper"] { min-height: 100dvh; }
-[data-barba="container"] { min-height: 100dvh; will-change: opacity, transform; }
+/* router root + route enter fade (CSS, not a 272 kB animation lib) */
+#root { min-height: 100dvh; }
+.route-enter { animation: route-in var(--dur-slow) var(--ease-out); }
+@keyframes route-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 768px) {
   /* --- sidebar: fully out of layout until opened --- */

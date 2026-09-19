@@ -7,15 +7,10 @@ export default defineConfig({
   build: {
     target: 'es2022',
     rollupOptions: {
-      input: {
-        main: 'index.html',
-        chat: 'chat.html',
-        about: 'about.html',
-      },
+      input: 'index.html',
       output: {
         manualChunks: {
-          react: ['react', 'react-dom'],
-          motion: ['gsap', '@barba/core'],
+          react: ['react', 'react-dom', 'react-router-dom'],
         },
       },
     },

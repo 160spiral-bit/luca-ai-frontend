@@ -1,50 +1,32 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { HashRouter, Route, Routes, useLocation } from "react-router-dom";
 import "./index.css";
 import App from "./App";
 import { About } from "./pages";
-import { initBarba } from "./barba";
 
-const mounted = new WeakSet<Element>();
-
-function mount(el: Element) {
-  if (mounted.has(el)) return;
-  const ns = el.getAttribute("data-barba-namespace");
-  if (ns === "about") {
-    mounted.add(el);
-    ReactDOM.createRoot(el as HTMLElement).render(<About />);
-    return;
-  }
-  const target = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null) || (el as HTMLElement);
-  if ((target as HTMLElement).dataset.booted === "1") return;
-  (target as HTMLElement).dataset.booted = "1";
-  mounted.add(el);
-  ReactDOM.createRoot(target).render(
-    <React.StrictMode>
-      <App namespace={ns || "home"} />
-    </React.StrictMode>
+// HashRouter, not BrowserRouter: static hosting (Pages subpath + Vercel)
+// serves a single index.html with no server rewrites, so path URLs would
+// 404 and relative asset paths would break under /chat. Hash routes keep
+// ./assets/... resolving everywhere with zero server config.
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <main key={location.pathname + location.hash} className="route-enter">
+      <Routes>
+        <Route path="/" element={<App namespace="home" />} />
+        <Route path="/chat" element={<App namespace="chat" />} />
+        <Route path="/about" element={<About />} />
+        <Route path="*" element={<App namespace="home" />} />
+      </Routes>
+    </main>
   );
 }
 
-const initial = document.querySelector('[data-barba="container"]');
-if (initial) mount(initial);
-if (document.querySelector('[data-barba="wrapper"]')) {
-  initBarba(() => {
-    const el = document.querySelector('[data-barba="container"]');
-    if (el) mount(el);
-  });
-  // Fallback: Barba hook timing isn't fully reliable (container swaps have
-  // been observed without afterEnter firing). Watch the wrapper's direct
-  // children only — Barba swaps containers there. The old subtree:true
-  // observer ran querySelectorAll on every DOM mutation, i.e. every token.
-  const wrapper = document.querySelector('[data-barba="wrapper"]');
-  if (wrapper) {
-    const ensureMounted = () => {
-      wrapper.querySelectorAll('[data-barba="container"]').forEach((el) => {
-        const root = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null);
-        if (root && root.dataset.booted !== "1") mount(el);
-      });
-    };
-    new MutationObserver(ensureMounted).observe(wrapper, { childList: true });
-  }
-}
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  <React.StrictMode>
+    <HashRouter>
+      <AnimatedRoutes />
+    </HashRouter>
+  </React.StrictMode>
+);

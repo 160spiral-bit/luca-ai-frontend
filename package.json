@@ -12,13 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@barba/core": "^2.10.3",
     "@radix-ui/react-dialog": "^1.1.23",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/dompurify": "^3.0.5",
     "dompurify": "^3.4.15",
     "eventsource-parser": "^4.1.1",
-    "gsap": "^3.12.5",
     "idb-keyval": "^6.3.0",
     "katex": "^0.18.7",
     "lucide-react": "^0.469.0",
@@ -26,6 +24,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.4",
     "rehype-katex": "^7.0.1",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
