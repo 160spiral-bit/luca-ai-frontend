@@ -34,13 +34,17 @@ if (document.querySelector('[data-barba="wrapper"]')) {
     if (el) mount(el);
   });
   // Fallback: Barba hook timing isn't fully reliable (container swaps have
-  // been observed without afterEnter firing). Mount any unmounted container
-  // whenever the DOM changes, so a page can never strand blank.
-  const ensureMounted = () => {
-    document.querySelectorAll('[data-barba="container"]').forEach((el) => {
-      const root = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null);
-      if (root && root.dataset.booted !== "1") mount(el);
-    });
-  };
-  new MutationObserver(ensureMounted).observe(document.body, { childList: true, subtree: true });
+  // been observed without afterEnter firing). Watch the wrapper's direct
+  // children only — Barba swaps containers there. The old subtree:true
+  // observer ran querySelectorAll on every DOM mutation, i.e. every token.
+  const wrapper = document.querySelector('[data-barba="wrapper"]');
+  if (wrapper) {
+    const ensureMounted = () => {
+      wrapper.querySelectorAll('[data-barba="container"]').forEach((el) => {
+        const root = el.id === "root" ? (el as HTMLElement) : (el.querySelector("#root") as HTMLElement | null);
+        if (root && root.dataset.booted !== "1") mount(el);
+      });
+    };
+    new MutationObserver(ensureMounted).observe(wrapper, { childList: true });
+  }
 }

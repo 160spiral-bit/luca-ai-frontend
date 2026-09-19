@@ -1,4 +1,5 @@
 // Luca v2 — backend client. Speaks the exact server.js contract.
+import { createParser } from "eventsource-parser";
 import { loadSettings, loadToken, uid } from "./store";
 import type { AuthUser, Settings, Source, Tier } from "./store";
 
@@ -108,31 +109,36 @@ export async function* streamChat(opts: {
     if (!res.ok || !res.body) throw new Error("Backend error " + res.status);
     const reader = res.body.getReader();
     const dec = new TextDecoder();
-    let buf = "";
     let sawDone = false;
-    let currentEvent = "";
     const q: EngineEvent[] = [];
-    const handleLine = (line: string) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      if (trimmed.startsWith("event:")) { currentEvent = trimmed.slice(6).trim(); return; }
-      if (!trimmed.startsWith("data:")) return;
-      const payload = trimmed.slice(5).trim();
-      if (payload === "[DONE]") { sawDone = true; currentEvent = ""; return; }
+    // Stall watchdog: the main stream previously had no idle timer, so a hung
+    // backend spun forever. 45s without a single byte aborts with TimeoutError,
+    // which runStream surfaces as a retryable error.
+    const STALL_MS = 45_000;
+    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    const beat = () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => ctrl.abort(new DOMException("Stream stalled", "TimeoutError")), STALL_MS);
+    };
+    const handlePayload = (evName: string | undefined, payload: string) => {
+      const data = payload.trim();
+      if (!data) return;
+      if (data === "[DONE]") { sawDone = true; return; }
       try {
-        const j = JSON.parse(payload);
+        const j = JSON.parse(data);
+        const currentEvent = evName || "";
         // Artifact channel — separate from content so panel and bubble render concurrently
         if (currentEvent === "artifact_start" || j.artifactType) {
           if (j.id) q.push({ kind: "artifact_start", id: String(j.id), artifactType: String(j.artifactType || "html"), title: String(j.title || "Artifact") });
-          currentEvent = ""; return;
+          return;
         }
         if (currentEvent === "artifact_delta") {
           if (j.id && typeof j.chunk === "string") q.push({ kind: "artifact_delta", id: String(j.id), chunk: j.chunk });
-          currentEvent = ""; return;
+          return;
         }
         if (currentEvent === "artifact_end") {
           if (j.id) q.push({ kind: "artifact_end", id: String(j.id) });
-          currentEvent = ""; return;
+          return;
         }
         // Legacy artifact payload without event: prefix
         if (j.event === "artifact_start" && j.id) { q.push({ kind: "artifact_start", id: String(j.id), artifactType: String(j.artifactType || "html"), title: String(j.title || "Artifact") }); return; }
@@ -167,18 +173,25 @@ export async function* streamChat(opts: {
             }
           }
         }
-      } catch { /* partial line */ }
-      currentEvent = "";
+      } catch { /* malformed payload — skip, never crash the stream */ }
     };
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split("\n");
-      buf = lines.pop() || "";
-      for (const line of lines) handleLine(line);
-      while (q.length) yield q.shift()!;
-      if (sawDone) break;
+    // Spec-compliant SSE: handles \r\n, split frames, multi-line data:, and
+    // event: fields. Replaces the hand-rolled \n splitter (audit P1-12).
+    const parser = createParser({
+      onEvent: (ev) => handlePayload(ev.event, ev.data),
+    });
+    beat();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        beat();
+        parser.feed(dec.decode(value, { stream: true }));
+        while (q.length) yield q.shift()!;
+        if (sawDone) break;
+      }
+    } finally {
+      if (stallTimer) clearTimeout(stallTimer);
     }
     while (q.length) yield q.shift()!;
     yield { kind: "done" };

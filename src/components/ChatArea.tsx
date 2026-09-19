@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
@@ -67,7 +68,21 @@ function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?
   return <ThinkingIndicator currentLabel={`Thought for ${secs}s`} isDone={true} reasoningTrace={trace} />;
 }
 
-function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, onEditDraft }: {
+// Re-parse streaming text at ~30fps instead of per token.
+function useThrottled<T>(value: T, ms = 33): T {
+  const [v, setV] = useState(value);
+  const last = useRef(0);
+  useEffect(() => {
+    if (ms <= 0) { setV(value); return; }
+    const now = Date.now();
+    const wait = Math.max(0, ms - (now - last.current));
+    const id = window.setTimeout(() => { last.current = Date.now(); setV(value); }, wait);
+    return () => window.clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
+const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, onEditDraft }: {
   msg: LucaMessage; session: Session; isLast: boolean;
   onRegenerate: (sid: string, uid: string) => void;
   onToast: (m: string) => void;
@@ -80,15 +95,17 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
   const showVersion = versions.length > 1 && !msg.streaming;
   const idx = msg.versionIndex ?? versions.length - 1;
   const display = showVersion ? versions[idx] : msg.content;
+  // Throttle only while streaming; completed messages render immediately.
+  const shown = useThrottled(display ?? msg.content, msg.streaming ? 33 : 0);
   const cited = (() => {
-    if (!msg.sources?.length || !display) return [];
+    if (!msg.sources?.length || !shown) return [];
     const seen = new Set<number>();
     const re = /\[(\d{1,2})\](?!\()/g;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(display))) seen.add(Number(m[1]));
+    while ((m = re.exec(shown))) seen.add(Number(m[1]));
     return msg.sources.filter((s) => seen.has(s.id));
   })();
-  const isContentError = !!display && /The model didn't return a response|All models are rate-limited/i.test(display.trim());
+  const isContentError = !!shown && /The model didn't return a response|All models are rate-limited/i.test(shown.trim());
   // While streaming with no content yet: ONLY the thinking indicator (single icon, no avatar).
   if (msg.streaming && !display) {
     return (
@@ -107,7 +124,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
           <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
         )}
 
-        {isContentError ? null : display ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{display}</div>}><Markdown text={display} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
+        {isContentError ? null : shown ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
         {cited.length > 0 && (
           <div className="sources-pill-wrap">
             <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
@@ -127,7 +144,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
             )}
           </div>
         )}
-        {msg.streaming && display ? <span className="cursor" aria-hidden="true" /> : null}
+        {msg.streaming && shown ? <span className="cursor" aria-hidden="true" /> : null}
         {(!!msg.error || isContentError) && !msg.streaming && (() => {
           const modelLabel = msg.tier ? `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}` : "Luca";
           const lastUserText = (() => {
@@ -149,7 +166,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
             <button className="mini-btn" onClick={() => onRegenerate(session.id, msg.uid)}>Retry</button>
           </div>
         )}
-        {!msg.streaming && (display || msg.error) && (
+        {!msg.streaming && (shown || msg.error) && (
           <div className="msg-meta">
             {msg.tier && (
               <span className="model-tag" title={msg.modelMeta?.pinned ? "Admin-pinned model" : "Active model"}>
@@ -159,7 +176,7 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
             )}
             {showVersion && <span>v{idx + 1}/{versions.length}</span>}
             <span className="msg-actions">
-              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(display ?? msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
+              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
                 {copied ? <Check size={13} /> : <Copy size={13} />}
               </button>
               <button className="icon-btn" aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
@@ -178,9 +195,11 @@ function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, o
       </div>
     </div>
   );
-}
+}, (a, b) => a.msg === b.msg && a.isLast === b.isLast && a.session.id === b.session.id);
+// patchMsg returns new objects only for the touched message, so identity
+// comparison is exact and cheap. session.id covers regenerate targets.
 
-function UserMsg({ msg, session, onEditResend }: {
+const UserMsg = memo(function UserMsg({ msg, session, onEditResend }: {
   msg: LucaMessage; session: Session;
   onEditResend: (sid: string, uid: string, text: string) => void;
 }) {
@@ -224,7 +243,7 @@ function UserMsg({ msg, session, onEditResend }: {
       </div>
     </div>
   );
-}
+}, (a, b) => a.msg === b.msg && a.session.id === b.session.id);
 
 export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onToast, onEditDraft }: Props) {
   const threadRef = useRef<HTMLDivElement>(null);
@@ -254,15 +273,46 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
       setStuck(false);
     }
   }, [session, settings.autoScroll]);
-  if (!session || session.messages.length === 0) {
+  // Long threads (>60 messages) render only the visible window. Dynamic
+  // measurement handles wildly varying message heights; streaming growth
+  // re-measures via ResizeObserver and the auto-scroll effect below sticks.
+  const msgs = session?.messages ?? [];
+  const useVirtual = msgs.length > 60;
+  const virtualizer = useVirtualizer({
+    count: msgs.length,
+    getScrollElement: () => threadRef.current,
+    estimateSize: () => 240,
+    overscan: 6,
+  });
+  const renderMsg = (m: LucaMessage, i: number) => m.role === "user"
+    ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} />
+    : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />;
+  if (!session || msgs.length === 0) {
     return null;
   }
   return (
     <div className="thread-wrap">
       <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
-      {session.messages.map((m, i) => m.role === "user"
-        ? <UserMsg key={m.uid} msg={m} session={session} onEditResend={onEditResend} />
-        : <AssistantMsg key={m.uid} msg={m} session={session} isLast={i === session.messages.length - 1} onRegenerate={onRegenerate} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />)}
+      {useVirtual ? (
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((v) => {
+            const m = msgs[v.index];
+            if (!m) return null;
+            return (
+              <div
+                key={m.uid}
+                data-index={v.index}
+                ref={(el) => { if (el) virtualizer.measureElement(el); }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${v.start}px)` }}
+              >
+                {renderMsg(m, v.index)}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        msgs.map((m, i) => renderMsg(m, i))
+      )}
       </div></div>
       {stuck && (
         <button className="jump-btn" onClick={jumpToBottom} aria-label="Scroll to latest messages">

@@ -345,8 +345,14 @@ export default function App({ namespace }: { namespace: string }) {
         patchMsg(sid, auid, { streaming: false, interrupted: true });
         commitVersion(sid, auid, acc);
       } else {
+        const stalled = e instanceof DOMException && e.name === "TimeoutError";
         const raw = e instanceof Error ? e.message : "Something went wrong.";
-        patchMsg(sid, auid, { streaming: false, error: /failed to fetch|networkerror|load failed|typeerror/i.test(raw) ? "Backend not reachable — try again in a moment." : raw });
+        patchMsg(sid, auid, {
+          streaming: false,
+          error: stalled
+            ? "Stream stalled — the backend stopped responding. Hit Retry to continue."
+            : /failed to fetch|networkerror|load failed|typeerror/i.test(raw) ? "Backend not reachable — try again in a moment." : raw,
+        });
         commitVersion(sid, auid, acc);
       }
     } finally {
@@ -392,14 +398,15 @@ export default function App({ namespace }: { namespace: string }) {
       });
 
   const sendMessage = useCallback((text: string, attachments: Attachment[]) => {
-    if (isStreaming) return;
-    let sid = activeId;
+    if (streamingRef.current) return;
+    let sid = activeIdRef.current;
     let baseMsgs: LucaMessage[] = [];
-    if (!sid || !activeSession) {
+    const liveSession = sid ? sessionsRef.current.find((s) => s.id === sid) || null : null;
+    if (!sid || !liveSession) {
       sid = uid();
       setSessions((p) => [{ id: sid!, title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), messages: [] }, ...p].slice(0, 500));
       setActiveId(sid);
-    } else baseMsgs = activeSession.messages;
+    } else baseMsgs = liveSession.messages;
     const userMsg: LucaMessage = { uid: uid(), role: "user", content: text, ts: Date.now(), attachments: attachments.length ? attachments : undefined };
     const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
     const id = sid;
@@ -414,11 +421,13 @@ export default function App({ namespace }: { namespace: string }) {
       ? { role: "user", content: [{ type: "text", text: fullText + "\n[Attached: " + attachments.filter((a) => a.type.startsWith("image/")).map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: fullText };
     void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier);
-  }, [activeId, activeSession, isStreaming, tier, runStream]);
+  }, [tier, runStream]);
 
+  const streamingRef = useRef(isStreaming);
+  useEffect(() => { streamingRef.current = isStreaming; }, [isStreaming]);
   const regenerate = useCallback((sid: string, mu: string) => {
-    if (isStreaming) return;
-    const s = sessions.find((x) => x.id === sid);
+    if (streamingRef.current) return;
+    const s = sessionsRef.current.find((x) => x.id === sid);
     if (!s) return;
     const idx = s.messages.findIndex((m) => m.uid === mu);
     if (idx < 0) return;
@@ -432,11 +441,11 @@ export default function App({ namespace }: { namespace: string }) {
     const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, fresh] } : x)));
     void runStream(sid, mu, toHistory(before), lastUser.content, tier);
-  }, [sessions, isStreaming, tier, runStream]);
+  }, [tier, runStream]);
 
   const editAndResend = useCallback((sid: string, mu: string, text: string) => {
-    if (isStreaming) return;
-    const s = sessions.find((x) => x.id === sid);
+    if (streamingRef.current) return;
+    const s = sessionsRef.current.find((x) => x.id === sid);
     if (!s) return;
     const idx = s.messages.findIndex((m) => m.uid === mu);
     if (idx < 0) return;
@@ -453,7 +462,7 @@ export default function App({ namespace }: { namespace: string }) {
       ? { role: "user", content: [{ type: "text", text: editFullText }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: editFullText };
     void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier);
-  }, [sessions, isStreaming, tier, runStream]);
+  }, [tier, runStream]);
 
   // Centered hero input -> docked composer FLIP on first message.
   const isEmpty = !activeSession || activeSession.messages.length === 0;
@@ -525,6 +534,10 @@ export default function App({ namespace }: { namespace: string }) {
   const handleEditDraft = useCallback((text: string) => {
     setComposerDraft(text);
   }, []);
+  // Stable suggestion sender — keeps memoised messages from re-rendering.
+  const sendSuggestion = useCallback((t: string) => {
+    sendMessage(t, []);
+  }, [sendMessage]);
 
   if (authLoading) {
     return <div className="center-page"><div className="spinner" /></div>;
@@ -635,7 +648,7 @@ export default function App({ namespace }: { namespace: string }) {
         ) : (
           <>
             <ChatArea session={activeSession} profile={profile} settings={settings}
-              onSuggestion={(t) => sendMessage(t, [])} onRegenerate={regenerate}
+              onSuggestion={sendSuggestion} onRegenerate={regenerate}
               onEditResend={editAndResend} onToast={toast} onEditDraft={handleEditDraft} />
             <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
               tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />

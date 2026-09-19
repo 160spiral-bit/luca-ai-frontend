@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@barba/core": "^2.10.3",
+    "@tanstack/react-virtual": "^3.14.13",
     "@types/dompurify": "^3.0.5",
     "dompurify": "^3.4.15",
+    "eventsource-parser": "^4.1.1",
     "gsap": "^3.12.5",
     "idb-keyval": "^6.3.0",
     "katex": "^0.18.7",
