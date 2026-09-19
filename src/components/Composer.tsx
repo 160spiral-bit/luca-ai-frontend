@@ -33,12 +33,17 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
   // FIX 1a: auto-resize as the user types up to MAX_H (200px); only past
   // that does the textarea get its own internal scroll (overflow flips).
   // Resetting to "auto" first lets it shrink again when text is deleted.
+  // `tall` morphs the pill into a rounded box so long pastes don't stretch
+  // a capsule with buttons floating mid-air.
+  const [tall, setTall] = useState(false);
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
+    const isTall = ta.scrollHeight > 56;
+    setTall((p) => (p === isTall ? p : isTall));
   }, [text]);
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !streaming;
@@ -144,7 +149,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
             ))}
           </div>
         )}
-        <div className="composer" style={dragOver ? { borderColor: "var(--line-strong)" } : undefined}>
+        <div className={"composer" + (tall ? " composer-tall" : "")} style={dragOver ? { borderColor: "var(--line-strong)" } : undefined}>
           <input ref={fileRef} type="file" multiple hidden
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
           <button className="circle-btn" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Add files — or just paste a screenshot"><Plus size={19} /></button>

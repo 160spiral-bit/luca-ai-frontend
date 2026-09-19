@@ -353,6 +353,11 @@ input, textarea, select { font: inherit; color: inherit; }
 .composer textarea::-webkit-scrollbar-track { background: transparent; }
 .composer textarea::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
 .composer textarea::placeholder { color: var(--ink-3); }
+/* Tall mode: pill morphs into a rounded box, buttons dock to the bottom,
+   breathing room for long pastes. */
+.composer-tall { border-radius: 28px; align-items: flex-end; }
+.composer-tall textarea { line-height: 1.5; padding: 10px 0; }
+.hero-input .composer-tall { border-radius: 28px; }
 .circle-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); flex-shrink: 0; transition: background 0.15s ease-out, color 0.15s ease-out; }
 .circle-btn:hover { background: var(--surface-2); color: var(--ink); }
 .send-btn { background: var(--accent); color: var(--accent-ink); }
