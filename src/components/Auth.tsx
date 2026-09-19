@@ -40,6 +40,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
   const [oauthLoaded, setOauthLoaded] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [imgOk, setImgOk] = useState(true);
   const [avail, setAvail] = useState<{ available: boolean | null; reason: string | null }>({ available: null, reason: null });
   const timer = useRef<number | undefined>(undefined);
 
@@ -244,8 +245,8 @@ export default function Auth({ onAuth, onGuest }: Props) {
         </div>
       </div>
       <div className="luca-auth-right">
-        <div className="luca-photo luca-photo-art" aria-hidden="true">
-          <span className="luca-photo-orb" />
+        <div className="luca-photo">
+          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" onError={() => setImgOk(false)} />}
         </div>
       </div>
     </div>
