@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { Menu, PanelLeft } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import Composer from "./components/Composer";
 import Auth from "./components/Auth";
-import ArtifactPanel from "./components/ArtifactPanel";
+const ArtifactPanel = lazy(() => import("./components/ArtifactPanel"));
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
 import {
@@ -655,7 +655,9 @@ export default function App({ namespace }: { namespace: string }) {
         <AdminPanel token={loadToken() || ""} authUserId={authUser.id} onRefreshSelf={refreshSelf} onClose={() => setPanel(null)} onToast={toast} />
       )}
       {activeArtifactId && artifacts[activeArtifactId] && (
-        <ArtifactPanel artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
+        <Suspense fallback={null}>
+          <ArtifactPanel artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
+        </Suspense>
       )}
 
       <div className="toasts">

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import mermaid from "mermaid";
 
-mermaid.initialize({ startOnLoad: false, theme: "dark", flowchart: { htmlLabels: true }, securityLevel: "loose" });
-
+// Mermaid loads dynamically on first diagram — never in the eager bundle.
+// Theme-aware (was hardcoded dark) and securityLevel strict (was loose,
+// which allowed HTML injection through diagram labels).
 export function Mermaid({ code }: { code: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -12,7 +12,11 @@ export function Mermaid({ code }: { code: string }) {
     let dead = false;
     (async () => {
       try {
-        // mermaid v11 API: render(id, code) returns {svg}. Guard empty/invalid.
+        const mermaid = (await import("mermaid")).default;
+        const dark = document.documentElement.getAttribute("data-theme") !== "light";
+        mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "default", securityLevel: "strict" });
+        // mermaid v10 API: render(id, code) returns { svg }. Unique id per
+        // render; empty code guarded above with a <pre> fallback below.
         const id = "mmd-" + Math.random().toString(36).slice(2) + "-" + Date.now().toString(36);
         const { svg } = await mermaid.render(id, trimmed);
         if (!dead && ref.current) ref.current.innerHTML = svg;

@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Mermaid } from "./Mermaid";
+import { Suspense, lazy, useState } from "react";
 import type { Artifact, ArtifactVersion } from "../lib/store";
+
+const Mermaid = lazy(() => import("./Mermaid").then((m) => ({ default: m.Mermaid })));
 
 function CodeView({ code, language }: { code: string; language: string }) {
   return <pre style={{ margin: 0, padding: 16, overflow: "auto" }}><code>{code}</code><div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>{language}</div></pre>;
@@ -23,7 +24,7 @@ function ArtifactPreview({ type, content }: { type: string; content: string }) {
     return <div style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 14 }}>{content}</div>;
   }
   if (type === "mermaid" || content.trim().startsWith("xychart")) {
-    return <div style={{ padding: 16 }}><Mermaid code={content} /></div>;
+    return <div style={{ padding: 16 }}><Suspense fallback={<pre>{content}</pre>}><Mermaid code={content} /></Suspense></div>;
   }
   return <CodeView code={content} language={type} />;
 }
