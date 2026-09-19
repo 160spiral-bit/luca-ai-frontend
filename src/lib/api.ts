@@ -2,11 +2,69 @@
 import { loadSettings, loadToken, uid } from "./store";
 import type { AuthUser, Settings, Source, Tier } from "./store";
 
-export const base = () => (loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com").replace(/\/+$/, "");
+const FALLBACK = "https://luca-ai-iozy.onrender.com";
+// backendUrl is user-writable in localStorage with no UI — an XSS foothold
+// could repoint it (and the Bearer header) at an attacker server. Only the
+// env default, the production origin, and loopback are ever used.
+const ALLOWED_HOSTS = new Set(["luca-ai-iozy.onrender.com", "localhost", "127.0.0.1"]);
+function safeBase(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return ALLOWED_HOSTS.has(u.hostname) ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+export const base = () => {
+  const env = (import.meta.env.VITE_API_URL as string | undefined) || "";
+  const raw = (env || loadSettings().backendUrl || FALLBACK).replace(/\/+$/, "");
+  return safeBase(raw) || FALLBACK;
+};
 const authHeaders = (): Record<string, string> => {
   const t = loadToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
+
+// Named API calls — no component should call fetch directly.
+const req = (path: string, token?: string, init?: RequestInit): Promise<Response> =>
+  fetch(base() + path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...((init?.headers as Record<string, string>) || {}) },
+  });
+
+export const pingHealth = () => fetch(base() + "/api/health").catch(() => null);
+export const getUserData = (token: string) => req("/api/user/data", token);
+export const verifySession = (token: string) => req("/api/auth/verify", token);
+export const putUserData = (token: string, body: unknown) =>
+  req("/api/user/data", token, { method: "POST", body: JSON.stringify(body) }).catch(() => null);
+export const setUsername = async (token: string, username: string): Promise<{ error?: string }> => {
+  const r = await req("/api/auth/username", token, { method: "PUT", body: JSON.stringify({ username }) });
+  if (!r.ok) {
+    try {
+      const j = await r.json();
+      return { error: (j.error as string) || "Failed" };
+    } catch {
+      return { error: "Failed" };
+    }
+  }
+  return {};
+};
+export const getModels = async (): Promise<{ provider: string; model: string; tier: string }[] | null> => {
+  try {
+    const r = await req("/api/models");
+    if (!r.ok) return null;
+    const j = await r.json();
+    return Array.isArray(j?.models) ? j.models : null;
+  } catch {
+    return null;
+  }
+};
+export const adminStats = (token: string) => req("/api/admin/stats", token);
+export const adminUsers = (token: string) => req("/api/admin/users", token);
+export const updateAdminUser = (token: string, id: string, patch: Record<string, unknown>) =>
+  req(`/api/admin/users/${id}`, token, { method: "PUT", body: JSON.stringify(patch) });
+export const clearPending = (token: string) => req("/api/admin/clear-pending", token, { method: "POST" });
+export const testModel = (token: string, q: string) => req(`/api/test?q=${encodeURIComponent(q)}`, token);
 
 export type EngineEvent =
   | { kind: "reasoning"; text: string }
@@ -129,8 +187,6 @@ export async function* streamChat(opts: {
   }
 }
 
-export const isAbortError = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
-
 export async function followups(text: string): Promise<string[]> {
   try {
     const ctrl = new AbortController();
@@ -162,21 +218,6 @@ export async function refreshMe(): Promise<AuthUser | null> {
     if (!r.ok) return null;
     const j = await r.json();
     return j.user || null;
-  } catch { return null; }
-}
-export async function nameChat(userText: string, reply: string): Promise<string | null> {
-  try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch(base() + "/api/name-chat", {
-      method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
-      body: JSON.stringify({ userMessage: userText, assistantReply: reply }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(to);
-    if (!r.ok) return null;
-    const j = await r.json();
-    return typeof j.title === "string" && j.title.trim() ? j.title.trim() : null;
   } catch { return null; }
 }
 export async function nameChatFromMessages(messages: ChatMsg[]): Promise<string | null> {

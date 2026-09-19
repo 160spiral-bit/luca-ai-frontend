@@ -20,16 +20,13 @@ export interface LucaMessage {
 }
 export interface Session { id: string; title: string; createdAt: number; updatedAt: number; pinned?: boolean; messages: LucaMessage[]; }
 export interface Settings {
-  theme: "dark" | "light"; enterToSend: boolean; showTimestamps: boolean;
+  theme: "dark" | "light"; enterToSend: boolean;
   autoScroll: boolean; backendUrl: string; customPrompt: string;
   personality: { creativity: number; formality: number; verbosity: number };
 }
 export interface Profile { name: string; persona: string | null; theme: "dark" | "light"; avatar: string | null; complete?: boolean; }
 export interface ArtifactVersion { version: number; content: string; createdAt: string; }
 export interface Artifact { id: string; artifactType: "code" | "markdown" | "html" | "svg" | "mermaid"; title: string; versions: ArtifactVersion[]; }
-export function appendArtifactVersion(artifact: Artifact, content: string): Artifact {
-  return { ...artifact, versions: [...artifact.versions, { version: artifact.versions.length + 1, content, createdAt: new Date().toISOString() }] };
-}
 export interface AuthUser {
   id: string; email: string; name: string; username: string; provider: string;
   avatar?: string | null; verified?: boolean; isAdmin?: boolean;
@@ -49,7 +46,7 @@ function del(k: string) { try { localStorage.removeItem(k); } catch { /* missing
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 const DEFAULT_SETTINGS: Settings = {
-  theme: "dark", enterToSend: true, showTimestamps: false, autoScroll: true, backendUrl: "",
+  theme: "dark", enterToSend: true, autoScroll: true, backendUrl: "",
   customPrompt: "", personality: { creativity: 50, formality: 50, verbosity: 50 },
 };
 export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personality: { ...DEFAULT_SETTINGS.personality } });
@@ -147,24 +144,10 @@ export const confirmedUsername = (id: string): boolean => {
 export const markUsernameConfirmed = (id: string) => {
   try { const m = JSON.parse(get(K.confirmed) || "{}"); m[id] = true; set(K.confirmed, JSON.stringify(m)); } catch { /* corrupted confirm map — dropped */ }
 };
-export const resetAll = () => [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user].forEach(del);
-
 export const titleFromMessage = (t: string) => {
   const c = t.replace(/\s+/g, " ").trim();
   if (c.length <= 44) return c || "New chat";
   return c.slice(0, 44).replace(/\s+\S*$/, "") + "…";
-};
-export const dayBucket = (ts: number) => {
-  const n = new Date(); const s = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
-  if (ts >= s) return "Today";
-  if (ts >= s - 86400000) return "Yesterday";
-  if (ts >= s - 6 * 86400000) return "Previous 7 days";
-  return "Older";
-};
-export const formatTime = (ts: number) => {
-  const d = new Date(ts);
-  const t = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return d.toDateString() === new Date().toDateString() ? t : `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${t}`;
 };
 export async function copyText(t: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(t); return true; }

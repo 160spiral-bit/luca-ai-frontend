@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, RefreshCw, Trash2, X, Cpu, XCircle, CheckCircle2 } from "lucide-react";
-import { base } from "../lib/api";
+import { adminStats, adminUsers, clearPending, getModels, testModel, updateAdminUser } from "../lib/api";
 import { downscaleImage } from "../lib/store";
 import type { AuthUser, Profile, Settings } from "../lib/store";
 
@@ -177,10 +177,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
 
   const fetchData = async () => {
     try {
-      const [s, u] = await Promise.all([
-        fetch(base() + "/api/admin/stats", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(base() + "/api/admin/users", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+      const [s, u] = await Promise.all([adminStats(token), adminUsers(token)]);
       if (s.ok) setStats(await s.json());
       if (u.ok) {
         const j = await u.json();
@@ -200,16 +197,17 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
     return () => window.clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    fetch(base() + "/api/models").then((r) => (r.ok ? r.json() : null)).then((j) => {
+    void getModels().then((models) => {
+      if (!models) return;
       const seen = new Map<string, { key: string; tiers: string[] }>();
-      for (const m of j?.models || []) {
+      for (const m of models) {
         const key = `${m.provider}/${m.model}`;
         const ex = seen.get(key);
         if (ex) { if (!ex.tiers.includes(m.tier)) ex.tiers.push(m.tier); }
         else seen.set(key, { key, tiers: [m.tier] });
       }
       setModels([...seen.values()]);
-    }).catch(() => {});
+    });
   }, []);
   useEffect(() => {
     if (busy.current) return;
@@ -219,10 +217,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
 
   const updateUser = async (id: string, patch: Record<string, unknown>, label?: string): Promise<boolean> => {
     try {
-      const r = await fetch(base() + `/api/admin/users/${id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(patch),
-      });
+      const r = await updateAdminUser(token, id, patch);
       if (!r.ok) { onToast?.("Couldn't save that — try again"); return false; }
       fetchData();
       if (id === authUserId) onRefreshSelf?.();
@@ -253,7 +248,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
         return;
       }
       try {
-        const r = await fetch(base() + `/api/test?q=${encodeURIComponent(value)}`, { headers: { Authorization: `Bearer ${token}` } });
+        const r = await testModel(token, value);
         const j = await r.json();
         const first = j?.results?.[0];
         if (String(first?.status || "").startsWith("WORKS")) setTest({ state: "ok", msg: `Pinned + works${String(first.status).includes("via") ? ` (${first.status})` : ""}` });
@@ -322,7 +317,7 @@ export function AdminPanel({ token, authUserId, onRefreshSelf, onClose, onToast 
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn-ghost" onClick={fetchData}><RefreshCw size={13} />Refresh</button>
         <button className="btn-ghost btn-danger" onClick={async () => {
-          await fetch(base() + "/api/admin/clear-pending", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+          await clearPending(token);
           fetchData();
         }}><Trash2 size={13} />Clear pending ({stats?.pendingSignups ?? 0})</button>
       </div>

@@ -7,13 +7,16 @@ import Auth from "./components/Auth";
 import ArtifactPanel from "./components/ArtifactPanel";
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
-import { followups, nameChatFromMessages, refreshMe, streamChat, verifyToken } from "./lib/api";
+import {
+  followups, getUserData, nameChatFromMessages, pingHealth, putUserData,
+  refreshMe, setUsername, streamChat, verifySession, verifyToken,
+} from "./lib/api";
 import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
-  clearAuth, clearDeviceState, clearSessions, confirmedUsername, defaultSettings, downscaleImage, isGuest,
+  clearAuth, clearDeviceState, confirmedUsername, defaultSettings, downscaleImage, isGuest,
   loadActiveId, loadAuthUser, loadProfile, loadSessions,
   loadSettings, loadTier, loadToken, markUsernameConfirmed,
-  resetAll, saveActiveId, saveAuthUser, saveProfile, saveSessions, saveSettings,
+  saveActiveId, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
@@ -107,7 +110,7 @@ export default function App({ namespace }: { namespace: string }) {
   }, []);
 
   useEffect(() => {
-    const ping = () => { try { fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/health").catch(() => { /* best-effort keep-alive */ }); } catch { /* best-effort keep-alive */ } };
+    const ping = () => { void pingHealth(); };
     ping();
     const id = window.setInterval(ping, 60000);
     return () => window.clearInterval(id);
@@ -143,7 +146,7 @@ export default function App({ namespace }: { namespace: string }) {
     if (cached) {
       setAuthUser(cached);
       setAuthLoading(false);
-      fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/auth/verify", { headers: { Authorization: `Bearer ${saved}` } })
+      verifySession(saved)
         .then((r) => {
           if (r.status === 401) { wipeClientState(); clearAuth(); setAuthUser(null); return null; }
           return r.ok ? r.json() : null;
@@ -187,7 +190,7 @@ export default function App({ namespace }: { namespace: string }) {
     const myId = authUser.id;
     const token = loadToken();
     if (!token) return;
-    fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/user/data", { headers: { Authorization: `Bearer ${token}` } })
+    getUserData(token)
       .then((r) => {
         if (r.status === 401) { clearAuth(); setAuthUser(null); setGuestState(false); return null; }
         return r.ok ? r.json() : null;
@@ -241,10 +244,7 @@ export default function App({ namespace }: { namespace: string }) {
     const token = loadToken();
     if (!token) return;
     const t = window.setTimeout(() => {
-      fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/user/data", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ sessions, activeId, settings, tier, profile }),
-      }).catch(() => {});
+      void putUserData(token, { sessions, activeId, settings, tier, profile });
     }, 900);
     return () => window.clearTimeout(t);
   }, [sessions, activeId, settings, tier, profile, authUser, guest]);
@@ -513,7 +513,7 @@ export default function App({ namespace }: { namespace: string }) {
   }, [toast, wipeClientState]);
   const resetEverything = useCallback(() => {
     abortRef.current?.abort();
-    resetAll(); void clearSessions(); clearAuth(); setGuest(false); setGuestState(false);
+    clearDeviceState(); clearAuth(); setGuest(false); setGuestState(false);
     setAuthUser(null); setSessions([]); setActiveId(null); setPanel(null);
     setTier("flash"); setProfile(null);
     document.documentElement.setAttribute("data-theme", "dark");
@@ -545,12 +545,8 @@ export default function App({ namespace }: { namespace: string }) {
             const token = loadToken();
             if (!token) return;
             try {
-              const r = await fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/auth/username", {
-                method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ username: nameDraft.trim() }),
-              });
-              const j = await r.json();
-              if (!r.ok) throw new Error(j.error || "Failed");
+              const { error } = await setUsername(token, nameDraft.trim());
+              if (error) throw new Error(error);
               markUsernameConfirmed(authUser.id);
               saveAuthUser({ ...authUser, username: nameDraft.trim() });
               setAuthUser({ ...authUser, username: nameDraft.trim() });
@@ -591,12 +587,7 @@ export default function App({ namespace }: { namespace: string }) {
             // instead of relying on the debounced sync (tab could close).
             if (authUser && !guest) {
               const t = loadToken();
-              if (t) {
-                fetch((loadSettings().backendUrl || "https://luca-ai-iozy.onrender.com") + "/api/user/data", {
-                  method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-                  body: JSON.stringify({ sessions, activeId, settings, tier, profile: p }),
-                }).catch(() => {});
-              }
+              if (t) void putUserData(t, { sessions, activeId, settings, tier, profile: p });
             }
           }}>Start chatting</button>
         </div>
