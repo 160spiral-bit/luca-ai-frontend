@@ -1,4 +1,6 @@
 // Luca v2 — types + storage. Keys preserved from v1 so sessions survive.
+import { del as idbDel, get as idbGet, set as idbSet } from "idb-keyval";
+
 export type Tier = "flash" | "pro";
 export type Role = "user" | "assistant";
 
@@ -56,6 +58,7 @@ export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personali
 // overwriting individual fields.
 export const clearDeviceState = () => {
   [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed].forEach(del);
+  void clearSessions();
   try { sessionStorage.clear(); } catch { /* storage may be unavailable — device keys already removed */ }
 };
 export const loadSettings = (): Settings => {
@@ -68,27 +71,57 @@ export const loadSettings = (): Settings => {
 };
 export const saveSettings = (s: Settings) => set(K.settings, JSON.stringify(s));
 
-export const loadSessions = (): Session[] => {
-  try {
-    const p = JSON.parse(get(K.sessions) || "[]");
-    if (!Array.isArray(p)) return [];
-    // A stream can never survive a page reload: any message saved mid-stream
-    // would otherwise render a stuck "thinking" spinner forever (or look like
-    // it's regenerating). Settle them: empty stubs become interrupted (Retry
-    // button), partial content just stops streaming.
-    for (const s of p) {
-      if (!s || !Array.isArray(s.messages)) continue;
-      for (const m of s.messages) {
-        if (m && m.streaming) {
-          m.streaming = false;
-          if (m.role === "assistant" && !String(m.content || "").trim()) m.interrupted = true;
-        }
+// Sessions live in IndexedDB (quota is GBs, not localStorage's ~5MB), so a
+// few screenshots no longer silently end all persistence. Small prefs stay
+// in localStorage because the inline theme script reads them pre-paint.
+const SESSIONS_KEY = "luca-sessions";
+
+function settleStreaming(list: Session[]): Session[] {
+  // A stream can never survive a page reload: any message saved mid-stream
+  // would otherwise render a stuck "thinking" spinner forever (or look like
+  // it's regenerating). Settle them: empty stubs become interrupted (Retry
+  // button), partial content just stops streaming.
+  for (const s of list) {
+    if (!s || !Array.isArray(s.messages)) continue;
+    for (const m of s.messages) {
+      if (m && m.streaming) {
+        m.streaming = false;
+        if (m.role === "assistant" && !String(m.content || "").trim()) m.interrupted = true;
       }
     }
-    return p;
-  } catch { return []; }
-};
-export const saveSessions = (l: Session[]) => set(K.sessions, JSON.stringify(l.slice(0, 500)));
+  }
+  return list;
+}
+
+export async function loadSessions(): Promise<Session[]> {
+  try {
+    const raw = await idbGet<Session[]>(SESSIONS_KEY);
+    if (Array.isArray(raw)) return settleStreaming(raw);
+  } catch { /* IndexedDB unavailable — try legacy localStorage */ }
+  // One-time migration from localStorage, then the old key is removed.
+  try {
+    const legacy = JSON.parse(get(K.sessions) || "[]");
+    del(K.sessions);
+    if (Array.isArray(legacy)) {
+      const settled = settleStreaming(legacy);
+      try { await idbSet(SESSIONS_KEY, settled.slice(0, 500)); } catch { /* migrated read-only */ }
+      return settled;
+    }
+  } catch { /* corrupted — start fresh */ }
+  return [];
+}
+
+export async function saveSessions(list: Session[], onError?: (e: Error) => void): Promise<void> {
+  try {
+    await idbSet(SESSIONS_KEY, list.slice(0, 500));
+  } catch (e) {
+    onError?.(e instanceof Error ? e : new Error("Could not save chats"));
+  }
+}
+
+export async function clearSessions(): Promise<void> {
+  try { await idbDel(SESSIONS_KEY); } catch { /* already gone */ }
+}
 export const loadActiveId = (): string | null => get(K.active);
 export const saveActiveId = (id: string | null) => { if (id) set(K.active, id); else del(K.active); };
 

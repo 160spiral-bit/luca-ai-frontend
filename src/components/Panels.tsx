@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, RefreshCw, Trash2, X, Cpu, XCircle, CheckCircle2 } from "lucide-react";
 import { base } from "../lib/api";
+import { downscaleImage } from "../lib/store";
 import type { AuthUser, Profile, Settings } from "../lib/store";
 
 function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -125,7 +126,9 @@ export function ProfilePanel({ profile, authUser, onSave, onClose, onLogout, onT
   const pickFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith("image/")) return;
     const r = new FileReader();
-    r.onload = () => { const v = String(r.result); setAvatar(v); onSave({ avatar: v }); };
+    // Avatars downscale to 256px like composer images — full-res photos in
+    // localStorage compound the quota problem (audit P0-2).
+    r.onload = () => { void downscaleImage(String(r.result), 256).then((v) => { setAvatar(v); onSave({ avatar: v }); }); };
     r.readAsDataURL(f);
   };
   const commitName = () => {

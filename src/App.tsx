@@ -10,7 +10,7 @@ import { barbaGo } from "./barba";
 import { followups, nameChatFromMessages, refreshMe, streamChat, verifyToken } from "./lib/api";
 import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
-  clearAuth, clearDeviceState, confirmedUsername, defaultSettings, isGuest,
+  clearAuth, clearDeviceState, clearSessions, confirmedUsername, defaultSettings, downscaleImage, isGuest,
   loadActiveId, loadAuthUser, loadProfile, loadSessions,
   loadSettings, loadTier, loadToken, markUsernameConfirmed,
   resetAll, saveActiveId, saveAuthUser, saveProfile, saveSessions, saveSettings,
@@ -33,11 +33,21 @@ function docBlockFor(atts?: Attachment[]): string {
 
 export default function App({ namespace }: { namespace: string }) {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile());
-  const [sessions, setSessions] = useState<Session[]>(() => loadSessions());
-  const [activeId, setActiveId] = useState<string | null>(() => {
-    const id = loadActiveId();
-    return id && loadSessions().some((s) => s.id === id) ? id : null;
-  });
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsReady, setSessionsReady] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(() => loadActiveId());
+  // Sessions hydrate async from IndexedDB (Phase 2). Nothing saves until ready.
+  useEffect(() => {
+    let dead = false;
+    void loadSessions().then((list) => {
+      if (dead) return;
+      setSessions(list);
+      const id = loadActiveId();
+      setActiveId(id && list.some((s) => s.id === id) ? id : null);
+      setSessionsReady(true);
+    });
+    return () => { dead = true; };
+  }, []);
   const [tier, setTier] = useState<Tier>(() => loadTier());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [streaming, setStreaming] = useState<{ sessionId: string; msgUid: string } | null>(null);
@@ -149,11 +159,17 @@ export default function App({ namespace }: { namespace: string }) {
     }).catch(() => setAuthLoading(false));
   }, [toast, wipeClientState]);
 
+  const storageFullToast = useCallback(() => {
+    toast("Couldn't save chats — storage is full. Delete old chats to free space.");
+  }, [toast]);
   useEffect(() => {
+    if (!sessionsReady) return;
     window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => saveSessions(sessions), 350);
+    saveTimer.current = window.setTimeout(() => {
+      void saveSessions(sessions, storageFullToast);
+    }, 350);
     return () => window.clearTimeout(saveTimer.current);
-  }, [sessions]);
+  }, [sessions, sessionsReady, storageFullToast]);
   useEffect(() => saveActiveId(activeId), [activeId]);
   useEffect(() => saveTier(tier), [tier]);
   useEffect(() => {
@@ -188,7 +204,7 @@ export default function App({ namespace }: { namespace: string }) {
         setSessions((prev) => {
           const localOnly = [...adopted, ...prev].filter((l) => !srvSessions.some((s: Session) => s.id === l.id));
           const merged = [...srvSessions, ...localOnly];
-          saveSessions(merged);
+          void saveSessions(merged, storageFullToast);
           return merged;
         });
         const srvActive = typeof d.activeId === "string" && srvSessions.some((s: Session) => s.id === d.activeId) ? d.activeId : null;
@@ -219,7 +235,7 @@ export default function App({ namespace }: { namespace: string }) {
         hydrated.current = true;
       })
       .catch(() => { /* stay unhydrated: never POST wiped state over server data */ });
-  }, [authUser, guest]);
+  }, [authUser, guest, storageFullToast]);
   useEffect(() => {
     if (!authUser || guest || !hydrated.current) return;
     const token = loadToken();
@@ -477,7 +493,7 @@ export default function App({ namespace }: { namespace: string }) {
     // account's server record. Nothing survives from the previous session.
     // Exception: guest work is adopted ONLY when the server record is empty
     // (same human, fresh account — never another account's data).
-    adoptRef.current = isGuest() ? loadSessions() : null;
+    adoptRef.current = isGuest() ? [...sessionsRef.current] : null;
     wipeClientState();
     setGuest(false); setGuestState(false);
     saveToken(token); saveAuthUser(user);
@@ -497,14 +513,14 @@ export default function App({ namespace }: { namespace: string }) {
   }, [toast, wipeClientState]);
   const resetEverything = useCallback(() => {
     abortRef.current?.abort();
-    resetAll(); clearAuth(); setGuest(false); setGuestState(false);
+    resetAll(); void clearSessions(); clearAuth(); setGuest(false); setGuestState(false);
     setAuthUser(null); setSessions([]); setActiveId(null); setPanel(null);
     setTier("flash"); setProfile(null);
     document.documentElement.setAttribute("data-theme", "dark");
     window.setTimeout(() => barbaGo("index.html"), 200);
   }, []);
   const refreshSelf = useCallback(() => {
-    refreshMe().then((u) => { if (u) { saveAuthUser(u); setAuthUser(u); } }).catch(() => {});
+    refreshMe().then((u) => { if (u) { saveAuthUser(u); setAuthUser(u); } }).catch(() => { /* stay with cached user */ });
   }, []);
   const handleEditDraft = useCallback((text: string) => {
     setComposerDraft(text);
@@ -559,7 +575,7 @@ export default function App({ namespace }: { namespace: string }) {
                 e.target.value = "";
                 if (!f || !f.type.startsWith("image/")) return;
                 const r = new FileReader();
-                r.onload = () => setAvatarDraft(String(r.result));
+                r.onload = () => { void downscaleImage(String(r.result), 256).then((v) => setAvatarDraft(v)); };
                 r.readAsDataURL(f);
               }} />
             </label></div>
