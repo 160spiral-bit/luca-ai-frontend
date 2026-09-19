@@ -26,6 +26,17 @@ function getGreeting() {
   return "Good evening";
 }
 
+// Inline document/code attachments as text blocks so the model actually
+// receives them. Images travel as image_url parts; everything else must be
+// text here or it is silently dropped.
+function docBlockFor(atts?: Attachment[]): string {
+  const docs = (atts || []).filter((a) => !a.type.startsWith("image/"));
+  if (!docs.length) return "";
+  return docs.map((a) => a.text
+    ? `[Attached file: ${a.name}]\n${a.text}`
+    : `[Attached file: ${a.name}] (could not extract text from this file type — contents not included)`).join("\n\n");
+}
+
 
 
 export default function App({ namespace }: { namespace: string }) {
@@ -340,7 +351,8 @@ export default function App({ namespace }: { namespace: string }) {
     msgs.filter((m) => (m.role === "user" ? m.content : m.content || m.toolRounds?.length))
       .map((m, i, arr) => {
         if (m.role !== "user") return { role: m.role, content: m.content };
-        const text = m.content + (m.attachments?.length ? "\n[Attached: " + m.attachments.map((a) => a.name).join(", ") + "]" : "");
+        const docs = docBlockFor(m.attachments);
+        const text = m.content + (m.attachments?.length ? "\n[Attached: " + m.attachments.map((a) => a.name).join(", ") + "]" : "") + (docs ? "\n\n" + docs : "");
         const imgs = (m.attachments || []).filter((a) => a.type.startsWith("image/"));
         if (imgs.length && i >= arr.length - 3) {
           return { role: "user", content: [{ type: "text", text }, ...imgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] };
@@ -363,10 +375,13 @@ export default function App({ namespace }: { namespace: string }) {
     setSessions((p) => p.map((s) => (s.id === id ? { ...s, updatedAt: Date.now(), messages: [...s.messages, userMsg, asstMsg] } : s)));
     // New turn must carry its images as image_url parts (not a plain string),
     // otherwise the thumbnail renders locally but the model never receives them.
+    // Documents/code ride along as inlined text blocks via docBlockFor.
     const newImgs = attachments.filter((a) => a.type.startsWith("image/"));
+    const docBlock = docBlockFor(attachments);
+    const fullText = text + (docBlock ? "\n\n" + docBlock : "");
     const newUserTurn: ChatMsg = newImgs.length
-      ? { role: "user", content: [{ type: "text", text: text + "\n[Attached: " + attachments.map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
-      : { role: "user", content: text };
+      ? { role: "user", content: [{ type: "text", text: fullText + "\n[Attached: " + attachments.filter((a) => a.type.startsWith("image/")).map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
+      : { role: "user", content: fullText };
     void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier, baseMsgs.length === 0);
   }, [activeId, activeSession, isStreaming, tier, runStream]);
 
@@ -398,9 +413,11 @@ export default function App({ namespace }: { namespace: string }) {
     const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, userMsg, asstMsg] } : x)));
     const editImgs = (userMsg.attachments || []).filter((a) => a.type.startsWith("image/"));
+    const editDocBlock = docBlockFor(userMsg.attachments);
+    const editFullText = text + (editDocBlock ? "\n\n" + editDocBlock : "");
     const editUserTurn: ChatMsg = editImgs.length
-      ? { role: "user", content: [{ type: "text", text }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
-      : { role: "user", content: text };
+      ? { role: "user", content: [{ type: "text", text: editFullText }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
+      : { role: "user", content: editFullText };
     void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier, false);
   }, [sessions, isStreaming, tier, runStream]);
 

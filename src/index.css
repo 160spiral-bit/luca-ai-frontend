@@ -329,6 +329,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .attach-chip img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
 .attach-chip button { display: grid; place-items: center; min-width: 28px; min-height: 28px; border-radius: 50%; transition: background 0.15s ease-out; }
 .attach-chip button:hover { background: var(--surface-2); }
+.doc-chip { display: inline-flex; align-items: center; gap: 6px; align-self: flex-end; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 6px 12px; font-size: 12px; margin-bottom: 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer {
   display: flex; align-items: center; gap: 6px;
   background: var(--surface); border: 1px solid var(--line);

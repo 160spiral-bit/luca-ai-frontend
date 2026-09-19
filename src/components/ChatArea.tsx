@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, Check, ChevronDown, Copy, Pencil, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
@@ -220,6 +220,9 @@ function UserMsg({ msg, session, onEditResend }: {
       <div className="msg-body" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
         {msg.attachments?.filter((a) => a.type.startsWith("image/")).map((a) => (
           <img key={a.id} src={a.dataUrl} alt={a.name} style={{ height: 80, borderRadius: 12, border: "1px solid var(--line)", marginBottom: 8, objectFit: "cover" }} />
+        ))}
+        {msg.attachments?.filter((a) => !a.type.startsWith("image/")).map((a) => (
+          <span key={a.id} className="doc-chip"><FileText size={13} />{a.name}</span>
         ))}
         <div className="msg-bubble"><Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense></div>
         <div className="msg-meta">

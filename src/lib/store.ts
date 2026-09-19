@@ -2,7 +2,7 @@
 export type Tier = "flash" | "pro";
 export type Role = "user" | "assistant";
 
-export interface Attachment { id: string; name: string; type: string; size: number; dataUrl: string; }
+export interface Attachment { id: string; name: string; type: string; size: number; dataUrl: string; text?: string; }
 export interface ToolRound { id: string; name: string; query: string; sources: { title: string; url: string; host: string }[]; status: "running" | "done"; ms?: number; }
 export interface Source { id: number; url: string; domain: string; title: string; }
 export interface SearchInfo { query: string; reason: string; count: number; }

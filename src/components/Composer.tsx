@@ -64,9 +64,22 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
         r.readAsDataURL(f);
         continue;
       }
+      // Documents/code: read as TEXT so the model can actually see the contents.
+      // (Binary files get attached by name only — flagged honestly downstream.)
       const r = new FileReader();
-      r.onload = () => setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type, size: f.size, dataUrl: String(r.result) }]);
-      r.readAsDataURL(f);
+      r.onload = () => {
+        const raw = String(r.result || "");
+        const ctrl = (raw.match(/[\x00-\x08\x0E-\x1F\x7F]/g) || []).length;
+        const isBinary = raw.includes("\0") || (raw.length > 500 && ctrl / Math.max(1, raw.length) > 0.1);
+        if (isBinary) {
+          setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type || "application/octet-stream", size: f.size, dataUrl: "" }]);
+          return;
+        }
+        const MAX_DOC = 50000;
+        const text = raw.length > MAX_DOC ? raw.slice(0, MAX_DOC) + `\n\n[... truncated — file was ${raw.length} characters ...]` : raw;
+        setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type || "text/plain", size: f.size, dataUrl: "", text }]);
+      };
+      r.readAsText(f);
     }
   };
   const addFilesRef = useRef(addFiles);
