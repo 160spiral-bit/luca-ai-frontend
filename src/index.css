@@ -267,6 +267,10 @@ input, textarea, select { font: inherit; color: inherit; }
 .chart-block svg { width: 100%; height: auto; display: block; }
 .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .md img.md-img { max-width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.md img { max-width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+.shiki-wrap pre.shiki { margin: 0; background: transparent !important; padding: 14px 16px; overflow-x: auto; }
+.inline-viz svg { max-width: 100%; height: auto; display: block; }
+.viz-fallback { font-size: 12px; }
 
 .msg-avatar.plain { background: none; border: none; color: var(--ink-2); }
 /* thinking — spinning spark + two-line crossfading status, no layout shift */

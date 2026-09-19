@@ -101,6 +101,7 @@ export const loadProfile = (): Profile | null => {
 export const saveProfile = (p: Profile) => set(K.onboard, JSON.stringify({ ...p, complete: true }));
 
 export const loadToken = (): string | null => get(K.token);
+// TODO(security): move luca-auth-token to an httpOnly cookie (see docs/SECURITY.md).
 export const saveToken = (t: string) => set(K.token, t);
 export const loadAuthUser = (): AuthUser | null => { try { const r = get(K.user); return r ? JSON.parse(r) : null; } catch { return null; } };
 export const saveAuthUser = (u: AuthUser) => set(K.user, JSON.stringify(u));

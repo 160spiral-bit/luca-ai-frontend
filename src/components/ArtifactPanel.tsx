@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Mermaid } from "./Markdown";
+import { Mermaid } from "./Mermaid";
 import type { Artifact, ArtifactVersion } from "../lib/store";
 
 function CodeView({ code, language }: { code: string; language: string }) {
@@ -7,7 +7,16 @@ function CodeView({ code, language }: { code: string; language: string }) {
 }
 function ArtifactPreview({ type, content }: { type: string; content: string }) {
   if (type === "html" || type === "svg") {
-    return <iframe sandbox="allow-scripts" srcDoc={content} className="artifact-iframe" title="Artifact preview" />;
+    return (
+      <iframe
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        {...{ csp: "default-src 'none'; style-src 'unsafe-inline'; img-src data:" }}
+        srcDoc={content}
+        className="artifact-iframe"
+        title="Artifact preview"
+      />
+    );
   }
   if (type === "markdown") {
     // simple markdown fallback — reuse same container styling
