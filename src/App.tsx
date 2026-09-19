@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import Composer from "./components/Composer";
 import Auth from "./components/Auth";
+import { Landing } from "./pages";
 const ArtifactPanel = lazy(() => import("./components/ArtifactPanel"));
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { barbaGo } from "./barba";
@@ -14,9 +15,9 @@ import {
 import type { ChatMsg, EngineEvent } from "./lib/api";
 import {
   clearAuth, clearDeviceState, confirmedUsername, defaultSettings, downscaleImage, isGuest,
-  loadActiveId, loadAuthUser, loadProfile, loadSessions,
+  loadActiveId, loadArtifacts, loadAuthUser, loadProfile, loadSessions,
   loadSettings, loadTier, loadToken, markUsernameConfirmed,
-  saveActiveId, saveAuthUser, saveProfile, saveSessions, saveSettings,
+  saveActiveId, saveArtifacts, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
@@ -67,6 +68,7 @@ export default function App({ namespace }: { namespace: string }) {
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
   const [composerDraft, setComposerDraft] = useState<string | null>(null);
+  const [enterAuth, setEnterAuth] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
 
@@ -165,6 +167,18 @@ export default function App({ namespace }: { namespace: string }) {
   const storageFullToast = useCallback(() => {
     toast("Couldn't save chats — storage is full. Delete old chats to free space.");
   }, [toast]);
+  // Artifacts persist in IndexedDB alongside sessions (Phase 6e).
+  useEffect(() => {
+    let dead = false;
+    void loadArtifacts().then((a) => { if (!dead) setArtifacts(a); });
+    return () => { dead = true; };
+  }, []);
+  useEffect(() => {
+    if (Object.keys(artifacts).length === 0) return;
+    const t = window.setTimeout(() => { void saveArtifacts(artifacts, storageFullToast); }, 500);
+    return () => window.clearTimeout(t);
+  }, [artifacts, storageFullToast]);
+  const openArtifact = useCallback((id: string) => { setActiveArtifactId(id); }, []);
   useEffect(() => {
     if (!sessionsReady) return;
     window.clearTimeout(saveTimer.current);
@@ -307,6 +321,15 @@ export default function App({ namespace }: { namespace: string }) {
               if (ex) return { ...prev, [ev.id]: { ...ex, versions: [...ex.versions, { version: ex.versions.length + 1, content: "", createdAt: new Date().toISOString() }] } };
               return { ...prev, [ev.id]: { id: ev.id, artifactType: ev.artifactType as Artifact["artifactType"], title: ev.title, versions: [{ version: 1, content: "", createdAt: new Date().toISOString() }] } };
             });
+            // Link the artifact to its message so it survives reloads (Phase 6e).
+            {
+              const cur = sessionsRef.current.find((s) => s.id === sid);
+              const curMsg = cur?.messages.find((m) => m.uid === auid);
+              const ids = curMsg?.artifactIds && curMsg.artifactIds.includes(ev.id)
+                ? curMsg.artifactIds
+                : [...(curMsg?.artifactIds || []), ev.id];
+              patchMsg(sid, auid, { artifactIds: ids });
+            }
             setActiveArtifactId(ev.id);
             break;
           }
@@ -464,6 +487,11 @@ export default function App({ namespace }: { namespace: string }) {
     void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier);
   }, [tier, runStream]);
 
+  // Version switcher: re-added in Phase 6 with working controls (was threaded but never called).
+  const setVersion = useCallback((sid: string, mu: string, i: number) => {
+    setSessions((p) => p.map((s) => (s.id !== sid ? s : { ...s, messages: s.messages.map((m) => (m.uid === mu ? { ...m, versionIndex: i } : m)) })));
+  }, []);
+
   // Centered hero input -> docked composer FLIP on first message.
   const isEmpty = !activeSession || activeSession.messages.length === 0;
   const heroRect = useRef<DOMRect | null>(null);
@@ -542,7 +570,10 @@ export default function App({ namespace }: { namespace: string }) {
   if (authLoading) {
     return <div className="center-page"><div className="spinner" /></div>;
   }
+  // Signed-out home shows the Landing page first (live model counts), with
+  // Auth one click behind "Start chatting". Decided in Phase 6c over deletion.
   if (namespace === "home" && !authUser && !guest) {
+    if (!enterAuth) return <Landing onEnter={() => setEnterAuth(true)} />;
     return <Auth onAuth={handleAuth} onGuest={handleGuest} />;
   }
   if (!authUser && !guest) return <Auth onAuth={handleAuth} onGuest={handleGuest} />;
@@ -649,7 +680,7 @@ export default function App({ namespace }: { namespace: string }) {
           <>
             <ChatArea session={activeSession} profile={profile} settings={settings}
               onSuggestion={sendSuggestion} onRegenerate={regenerate}
-              onEditResend={editAndResend} onToast={toast} onEditDraft={handleEditDraft} />
+              onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} onOpenArtifact={openArtifact} />
             <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
               tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
           </>
@@ -669,7 +700,7 @@ export default function App({ namespace }: { namespace: string }) {
       )}
       {activeArtifactId && artifacts[activeArtifactId] && (
         <Suspense fallback={null}>
-          <ArtifactPanel artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
+          <ArtifactPanel key={activeArtifactId} artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
         </Suspense>
       )}
 

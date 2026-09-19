@@ -39,10 +39,12 @@ function VersionScrubber({ versions, index, onChange }: { versions: Artifact["ve
 }
 export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
   const [view, setView] = useState<"preview" | "code">("preview");
-  const [versionIdx, setVersionIdx] = useState(artifact.versions.length - 1);
-  const version: ArtifactVersion = artifact.versions[versionIdx] || artifact.versions[artifact.versions.length - 1] || { version: 0, content: "", createdAt: "" };
-  // Keep index at latest when new version arrives
-  if (versionIdx > artifact.versions.length - 1) setVersionIdx(artifact.versions.length - 1);
+  // Follow the latest unless the user scrubbed back (pinned). No setState
+  // during render; combined with key={artifact.id} this never shows stale v1.
+  const [pinned, setPinned] = useState<number | null>(null);
+  const lastIdx = artifact.versions.length - 1;
+  const versionIdx = pinned === null || pinned > lastIdx ? lastIdx : pinned;
+  const version: ArtifactVersion = artifact.versions[versionIdx] || artifact.versions[lastIdx] || { version: 0, content: "", createdAt: "" };
   return (
     <div className="artifact-panel">
       <div className="artifact-panel__header">
@@ -53,7 +55,14 @@ export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifac
           <button onClick={onClose} aria-label="Close artifact" style={{ marginLeft: 8 }}>✕</button>
         </div>
       </div>
-      <VersionScrubber versions={artifact.versions} index={versionIdx} onChange={setVersionIdx} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <VersionScrubber versions={artifact.versions} index={versionIdx} onChange={setPinned} />
+        </div>
+        {pinned !== null && pinned < lastIdx && (
+          <button className="mini-btn" onClick={() => setPinned(null)}>Latest</button>
+        )}
+      </div>
       <div className="artifact-panel__body">
         {view === "preview" ? <ArtifactPreview type={artifact.artifactType} content={version.content} /> : <CodeView code={version.content} language={artifact.artifactType} />}
       </div>

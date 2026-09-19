@@ -1,6 +1,6 @@
 import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Check, ChevronDown, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import Logo from "./Logo";
 import { copyText } from "../lib/store";
@@ -11,8 +11,10 @@ interface Props {
   onSuggestion: (t: string) => void;
   onRegenerate: (sid: string, uid: string) => void;
   onEditResend: (sid: string, uid: string, text: string) => void;
+  onVersion: (sid: string, uid: string, i: number) => void;
   onToast: (m: string) => void;
   onEditDraft: (text: string) => void;
+  onOpenArtifact: (id: string) => void;
 }
 
 function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: string; onRetry: () => void; onEditLastMessage: () => void }) {
@@ -46,7 +48,10 @@ export function ThinkingIndicator({ currentLabel, isDone, reasoningTrace }: { cu
     <div className="thinking">
       <button className="thinking__header" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
         <span className={`thinking-label ${isDone ? "thinking-label--done" : ""}`}>{currentLabel}</span>
-        <span className="thinking__meta">{elapsed}s<ChevronDown size={14} className={`thinking__chevron ${expanded ? "thinking__chevron--open" : ""}`} /></span>
+        <span className="thinking__meta">
+          {!isDone && <>{elapsed}s</>}
+          <ChevronDown size={14} className={`thinking__chevron ${expanded ? "thinking__chevron--open" : ""}`} />
+        </span>
       </button>
       {expanded && reasoningTrace.length > 0 && (
         <div className="thinking__trace">{reasoningTrace.map((line, i) => <p key={i} className="thinking__trace-line">{line}</p>)}</div>
@@ -82,9 +87,11 @@ function useThrottled<T>(value: T, ms = 33): T {
   return v;
 }
 
-const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegenerate, onToast, onSelect, onEditDraft }: {
+const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft, onOpenArtifact }: {
   msg: LucaMessage; session: Session; isLast: boolean;
   onRegenerate: (sid: string, uid: string) => void;
+  onVersion: (sid: string, uid: string, i: number) => void;
+  onOpenArtifact: (id: string) => void;
   onToast: (m: string) => void;
   onSelect: (text: string) => void;
   onEditDraft: (text: string) => void;
@@ -174,7 +181,26 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
                 {msg.modelMeta?.pinned ? `${msg.modelMeta.provider}/${msg.modelMeta.model}` : `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}`}
               </span>
             )}
-            {showVersion && <span>v{idx + 1}/{versions.length}</span>}
+            {!msg.streaming && msg.artifactIds && msg.artifactIds.length > 0 && (
+              <span className="artifact-links">
+                {msg.artifactIds.map((aid) => (
+                  <button key={aid} className="mini-btn" onClick={() => onOpenArtifact(aid)}>View artifact</button>
+                ))}
+              </span>
+            )}
+            {showVersion && (
+              <span className="version-nav">
+                <button className="icon-btn" disabled={idx === 0}
+                  onClick={() => onVersion(session.id, msg.uid, idx - 1)} aria-label="Previous version">
+                  <ChevronLeft size={13} />
+                </button>
+                <span aria-live="polite">{idx + 1}/{versions.length}</span>
+                <button className="icon-btn" disabled={idx === versions.length - 1}
+                  onClick={() => onVersion(session.id, msg.uid, idx + 1)} aria-label="Next version">
+                  <ChevronRight size={13} />
+                </button>
+              </span>
+            )}
             <span className="msg-actions">
               <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
                 {copied ? <Check size={13} /> : <Copy size={13} />}
@@ -245,7 +271,7 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend }: {
   );
 }, (a, b) => a.msg === b.msg && a.session.id === b.session.id);
 
-export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onToast, onEditDraft }: Props) {
+export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast, onEditDraft, onOpenArtifact }: Props) {
   const threadRef = useRef<HTMLDivElement>(null);
   const prevKey = useRef("");
   // Scroll-down pill: visible only when the user has scrolled well above the
@@ -286,7 +312,7 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
   });
   const renderMsg = (m: LucaMessage, i: number) => m.role === "user"
     ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} />
-    : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} />;
+    : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} onOpenArtifact={onOpenArtifact} />;
   if (!session || msgs.length === 0) {
     return null;
   }

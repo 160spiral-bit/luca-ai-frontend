@@ -67,8 +67,12 @@ export default function Sidebar(p: Props) {
           <input value={p.search} onChange={(e) => p.onSearch(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
         </div>
         <nav className="recents" aria-label="Recent chats">
-          {p.sessions.length === 0 && <div className="recents-empty">No chats yet</div>}
-          {p.sessions.length > 0 && <div className="recents-label">Recents</div>}
+          {visible.length === 0 && (
+            <div className="recents-empty">
+              {q ? `No chats matching "${p.search}"` : "No chats yet"}
+            </div>
+          )}
+          {visible.length > 0 && <div className="recents-label">Recents</div>}
           {visible.map((s) => (
                 <div key={s.id} style={{ position: "relative" }}>
                   {renamingId === s.id ? (

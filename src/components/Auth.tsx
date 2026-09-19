@@ -176,6 +176,12 @@ export default function Auth({ onAuth, onGuest }: Props) {
                 {oauthButtons}
                 <input className="luca-input" type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="username" aria-label="Email or username" />
                 <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" aria-label="Password" />
+                <div className="luca-row">
+                  <span />
+                  <button type="button" className="luca-link" onClick={() => switchMode("forgot")}>
+                    Forgot password?
+                  </button>
+                </div>
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Signing in…" : "Continue with email"}</button>
                 <p className="luca-signup-hint">
                   Don't have an account? <button type="button" className="luca-link" onClick={() => switchMode("signup")}>Sign up</button>

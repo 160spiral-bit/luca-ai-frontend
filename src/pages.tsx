@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import Logo from "./components/Logo";
-import { base } from "./lib/api";
+import { getModels } from "./lib/api";
 
 export function Landing({ onEnter }: { onEnter: () => void }) {
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   useEffect(() => {
-    fetch(base() + "/api/models").then((r) => (r.ok ? r.json() : null)).then((j) => {
+    void getModels().then((models) => {
+      if (!models) return;
       const c: Record<string, number> = {};
-      for (const m of j?.models || []) c[m.tier] = (c[m.tier] || 0) + 1;
+      for (const m of models) c[m.tier] = (c[m.tier] || 0) + 1;
       setCounts(c);
-    }).catch(() => {});
+    });
   }, []);
   return (
     <div className="center-page">

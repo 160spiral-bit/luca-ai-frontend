@@ -16,6 +16,7 @@ export interface LucaMessage {
   toolRounds?: ToolRound[]; attachments?: Attachment[];
   error?: string; interrupted?: boolean; streaming?: boolean;
   versions?: string[]; versionIndex?: number;
+  artifactIds?: string[];
   modelMeta?: { model: string; provider: string; pinned?: boolean } | null;
 }
 export interface Session { id: string; title: string; createdAt: number; updatedAt: number; pinned?: boolean; messages: LucaMessage[]; }
@@ -56,6 +57,7 @@ export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personali
 export const clearDeviceState = () => {
   [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed].forEach(del);
   void clearSessions();
+  void clearArtifacts();
   try { sessionStorage.clear(); } catch { /* storage may be unavailable — device keys already removed */ }
 };
 export const loadSettings = (): Settings => {
@@ -118,6 +120,41 @@ export async function saveSessions(list: Session[], onError?: (e: Error) => void
 
 export async function clearSessions(): Promise<void> {
   try { await idbDel(SESSIONS_KEY); } catch { /* already gone */ }
+}
+
+// Generated artifacts persist alongside sessions so they survive reloads.
+// Capped at 50 by recency — HTML artifacts can be large.
+const ARTIFACTS_KEY = "luca-artifacts";
+const MAX_ARTIFACTS = 50;
+
+export async function loadArtifacts(): Promise<Record<string, Artifact>> {
+  try {
+    const raw = await idbGet<Record<string, Artifact>>(ARTIFACTS_KEY);
+    if (raw && typeof raw === "object") return raw;
+  } catch { /* start empty */ }
+  return {};
+}
+
+export async function saveArtifacts(a: Record<string, Artifact>, onError?: (e: Error) => void): Promise<void> {
+  try {
+    const keys = Object.keys(a);
+    let out = a;
+    if (keys.length > MAX_ARTIFACTS) {
+      const latest = (art: Artifact) => art.versions[art.versions.length - 1]?.createdAt || "";
+      const keep = keys
+        .map((k) => k)
+        .sort((x, y) => (latest(a[y] as Artifact) < latest(a[x] as Artifact) ? -1 : 1))
+        .slice(0, MAX_ARTIFACTS);
+      out = Object.fromEntries(keep.map((k) => [k, a[k]])) as Record<string, Artifact>;
+    }
+    await idbSet(ARTIFACTS_KEY, out);
+  } catch (e) {
+    onError?.(e instanceof Error ? e : new Error("Could not save artifacts"));
+  }
+}
+
+export async function clearArtifacts(): Promise<void> {
+  try { await idbDel(ARTIFACTS_KEY); } catch { /* already gone */ }
 }
 export const loadActiveId = (): string | null => get(K.active);
 export const saveActiveId = (id: string | null) => { if (id) set(K.active, id); else del(K.active); };
