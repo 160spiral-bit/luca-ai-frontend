@@ -1,7 +1,7 @@
 # Luca AI — frontend source (v2)
 
 React 18 + Vite 6 + TypeScript + strict `tsc`, ESLint, vitest. Single-page app
-with hash routes (`#/` home/landing, `#/chat`, `#/about`) — one `index.html`,
+with hash routes (`#/` home, `#/chat`, `#/about`) — one `index.html`,
 no server rewrites needed. This repo is the source of truth.
 
 ## Layout

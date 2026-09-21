@@ -2,7 +2,6 @@ import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
-import Logo from "./Logo";
 import { copyText } from "../lib/store";
 import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
 
@@ -73,6 +72,10 @@ function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?
   return <ThinkingIndicator currentLabel={`Thought for ${secs}s`} isDone={true} reasoningTrace={trace} />;
 }
 
+function fmtTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 // Re-parse streaming text at ~30fps instead of per token.
 function useThrottled<T>(value: T, ms = 33): T {
   const [v, setV] = useState(value);
@@ -113,25 +116,32 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
     return msg.sources.filter((s) => seen.has(s.id));
   })();
   const isContentError = !!shown && /The model didn't return a response|All models are rate-limited/i.test(shown.trim());
-  // While streaming with no content yet: ONLY the thinking indicator (single icon, no avatar).
+  const copyThis = async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
+  // While streaming with no content yet: thinking indicator only.
   if (msg.streaming && !display) {
     return (
-      <div className="msg">
-        <div className="msg-body">
-          <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
-        </div>
+      <div className="msg msg-luca">
+        <div className="who">Luca</div>
+        <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
       </div>
     );
   }
   return (
-    <div className="msg" aria-busy={msg.streaming || undefined}>
-      {!msg.reasoning && <span className="msg-avatar plain"><Logo size={16} /></span>}
-      <div className="msg-body">
+    <div className="msg msg-luca" aria-busy={msg.streaming || undefined}>
+      <div className="who">Luca</div>
         {!msg.streaming && (
           <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
         )}
 
-        {isContentError ? null : shown ? <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense> : (!msg.reasoning && msg.streaming ? <span className="dots"><span /><span /><span /></span> : null)}
+        {isContentError ? null : shown ? (
+          <div className="bubble">
+            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense>
+            <button className="copy-btn" onClick={copyThis} aria-label="Copy message" title="Copy">
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
+        ) : (!msg.reasoning && msg.streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null)}
+        <div className="msg-time">{fmtTime(msg.ts)}</div>
         {cited.length > 0 && (
           <div className="sources-pill-wrap">
               <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
@@ -202,9 +212,6 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
               </span>
             )}
             <span className="msg-actions">
-              <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } }}>
-                {copied ? <Check size={13} /> : <Copy size={13} />}
-              </button>
               <button className="icon-btn" aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
                 <RefreshCw size={13} />
               </button>
@@ -218,28 +225,29 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }, (a, b) => a.msg === b.msg && a.isLast === b.isLast && a.session.id === b.session.id);
 // patchMsg returns new objects only for the touched message, so identity
 // comparison is exact and cheap. session.id covers regenerate targets.
 
-const UserMsg = memo(function UserMsg({ msg, session, onEditResend }: {
+const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   msg: LucaMessage; session: Session;
   onEditResend: (sid: string, uid: string, text: string) => void;
+  onToast: (m: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(msg.content);
   const [copied, setCopied] = useState(false);
+  const copyThis = async () => { if (await copyText(msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
   if (editing) {
     return (
-      <div className="msg user">
-        <div className="msg-body" style={{ maxWidth: "85%" }}>
+      <div className="msg msg-user">
+        <div style={{ maxWidth: "85%", width: "100%" }}>
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="edit-textarea"
-            style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--line-strong)", borderRadius: 12, padding: "10px 14px", resize: "vertical" }} />
+            style={{ width: "100%", background: "var(--s1)", border: "1px solid var(--line2)", borderRadius: 12, padding: "10px 14px", resize: "vertical", color: "var(--txt)" }} />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button className="mini-btn" style={{ border: "1px solid var(--line)", borderRadius: 999, padding: "6px 14px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
+            <button className="mini-btn" style={{ padding: "6px 14px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
             <button className="btn-primary" style={{ width: "auto", padding: "6px 18px", fontSize: 12 }} onClick={() => { if (draft.trim()) { onEditResend(session.id, msg.uid, draft.trim()); setEditing(false); } }}>Save</button>
           </div>
         </div>
@@ -247,25 +255,30 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend }: {
     );
   }
   return (
-    <div className="msg user">
-      <div className="msg-body" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-        {msg.attachments?.filter((a) => a.type.startsWith("image/")).map((a) => (
-          <img key={a.id} src={a.dataUrl} alt={a.name} style={{ height: 80, borderRadius: 12, border: "1px solid var(--line)", marginBottom: 8, objectFit: "cover" }} />
-        ))}
-        {msg.attachments?.filter((a) => !a.type.startsWith("image/")).map((a) => (
-          <span key={a.id} className="doc-chip"><FileText size={13} />{a.name}</span>
-        ))}
-        <div className="msg-bubble"><Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense></div>
-        <div className="msg-meta">
-          <span className="msg-actions">
-            <button className="icon-btn" aria-label="Copy" onClick={async () => { if (await copyText(msg.content)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </button>
-            <button className="icon-btn" aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
-              <Pencil size={13} />
-            </button>
-          </span>
+    <div className="msg msg-user">
+      <div className="bubble">
+        <Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense>
+        <button className="copy-btn" onClick={copyThis} aria-label="Copy message" title="Copy">
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+        </button>
+      </div>
+      {(msg.attachments?.length || 0) > 0 && (
+        <div className="att-chips">
+          {msg.attachments?.filter((a) => a.type.startsWith("image/")).map((a) => (
+            <img key={a.id} className="msg-thumb" src={a.dataUrl} alt={a.name} />
+          ))}
+          {msg.attachments?.filter((a) => !a.type.startsWith("image/")).map((a) => (
+            <span key={a.id} className="chip"><FileText size={11} />{a.name}</span>
+          ))}
         </div>
+      )}
+      <div className="msg-time">{fmtTime(msg.ts)}</div>
+      <div className="msg-meta hover-only">
+        <span className="msg-actions">
+          <button className="icon-btn" aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
+            <Pencil size={13} />
+          </button>
+        </span>
       </div>
     </div>
   );
@@ -311,7 +324,7 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
     overscan: 6,
   });
   const renderMsg = (m: LucaMessage, i: number) => m.role === "user"
-    ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} />
+    ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} onToast={onToast} />
     : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} onOpenArtifact={onOpenArtifact} />;
   // Screen-reader announcements for streaming — never on the message text
   // itself (that would read every token).

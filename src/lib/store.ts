@@ -19,9 +19,9 @@ export interface LucaMessage {
   artifactIds?: string[];
   modelMeta?: { model: string; provider: string; pinned?: boolean } | null;
 }
-export interface Session { id: string; title: string; createdAt: number; updatedAt: number; pinned?: boolean; messages: LucaMessage[]; }
+export interface Session { id: string; title: string; createdAt: number; updatedAt: number; pinned?: boolean; tier?: Tier; messages: LucaMessage[]; }
 export interface Settings {
-  theme: "dark" | "light"; enterToSend: boolean;
+  theme: "dark" | "light"; enterToSend: boolean; showTimestamps: boolean;
   autoScroll: boolean; backendUrl: string; customPrompt: string;
   personality: { creativity: number; formality: number; verbosity: number };
 }
@@ -47,7 +47,7 @@ function del(k: string) { try { localStorage.removeItem(k); } catch { /* missing
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
 const DEFAULT_SETTINGS: Settings = {
-  theme: "dark", enterToSend: true, autoScroll: true, backendUrl: "",
+  theme: "dark", enterToSend: true, showTimestamps: false, autoScroll: true, backendUrl: "",
   customPrompt: "", personality: { creativity: 50, formality: 50, verbosity: 50 },
 };
 export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personality: { ...DEFAULT_SETTINGS.personality } });

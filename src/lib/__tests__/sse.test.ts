@@ -4,7 +4,7 @@ import type { EngineEvent } from "../api";
 import type { Settings } from "../store";
 
 const settings = (): Settings => ({
-  theme: "dark", enterToSend: true, autoScroll: true, backendUrl: "",
+  theme: "dark", enterToSend: true, showTimestamps: false, autoScroll: true, backendUrl: "",
   customPrompt: "", personality: { creativity: 50, formality: 50, verbosity: 50 },
 });
 

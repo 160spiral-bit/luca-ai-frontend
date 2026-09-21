@@ -91,6 +91,10 @@ export function SettingsPanel({ settings, onChange, onClose, onReset }: {
           <div><div className="t">Auto-scroll</div><div className="d">Stay pinned to the latest reply</div></div>
           <button role="switch" aria-checked={settings.autoScroll} className={`switch ${settings.autoScroll ? "on" : ""}`} onClick={() => onChange({ autoScroll: !settings.autoScroll })} aria-label="Auto-scroll" />
         </div>
+        <div className="switch-row">
+          <div><div className="t">Show timestamps</div><div className="d">Display time under each message</div></div>
+          <button role="switch" aria-checked={settings.showTimestamps} className={`switch ${settings.showTimestamps ? "on" : ""}`} onClick={() => onChange({ showTimestamps: !settings.showTimestamps })} aria-label="Show timestamps" />
+        </div>
       </div>
       <PersonalityField settings={settings} onChange={onChange} />
       <div className="field"><label htmlFor="cp">Custom instructions</label>

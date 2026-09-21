@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Brain, FileText, Mic, Plus, Square, X } from "lucide-react";
+import { ChevronDown, FileText, Mic, Plus, Square, X } from "lucide-react";
 import { downscaleImage, uid } from "../lib/store";
 import type { Attachment, Settings, Tier } from "../lib/store";
 
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_LEN = 200000;
+
+function fmtSize(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1048576).toFixed(1)} MB`;
+}
+
+const TIER_LABEL: Record<Tier, string> = { flash: "Flash", pro: "Pro" };
 
 interface Props {
   streaming: boolean; onSend: (text: string, atts: Attachment[]) => void; onStop: () => void;
@@ -15,6 +23,7 @@ interface Props {
 export default function Composer({ streaming, onSend, onStop, tier, onTierChange, settings, onToast, prefill, onPrefillConsumed }: Props) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [modelOpen, setModelOpen] = useState(false);
 
   // Allow parent to push last user message back into the input for "Edit message"
   useEffect(() => {
@@ -28,23 +37,35 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
   const [listening, setListening] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const modelRef = useRef<HTMLDivElement | null>(null);
   const recogRef = useRef<{ stop: () => void } | null>(null);
+  const collapseTimer = useRef<number | undefined>(undefined);
 
-  // FIX 1a: auto-resize as the user types up to MAX_H (200px); only past
-  // that does the textarea get its own internal scroll (overflow flips).
-  // Resetting to "auto" first lets it shrink again when text is deleted.
-  // `tall` morphs the pill into a rounded box so long pastes don't stretch
-  // a capsule with buttons floating mid-air.
-  const [tall, setTall] = useState(false);
+  // Auto-grow up to 200px, then internal scroll. Reset to auto first so it
+  // shrinks again when text is deleted.
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
-    const isTall = ta.scrollHeight > 56;
-    setTall((p) => (p === isTall ? p : isTall));
   }, [text]);
+
+  // Model control: click-outside and Escape close it.
+  useEffect(() => {
+    if (!modelOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (modelRef.current && !modelRef.current.contains(e.target as Node)) setModelOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setModelOpen(false); taRef.current?.focus(); } };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.clearTimeout(collapseTimer.current);
+    };
+  }, [modelOpen]);
 
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !streaming;
   const doSend = () => {
@@ -53,6 +74,13 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
     onSend(text.trim(), attachments);
     setText(""); setAttachments([]);
     requestAnimationFrame(() => taRef.current?.focus());
+  };
+
+  const pickModel = (t: Tier) => {
+    onTierChange(t);
+    // Selected segment stays visible ~140ms, then the chip collapses back.
+    window.clearTimeout(collapseTimer.current);
+    collapseTimer.current = window.setTimeout(() => { setModelOpen(false); taRef.current?.focus(); }, 140);
   };
 
   const addFiles = (files: FileList | File[]) => {
@@ -82,8 +110,8 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
           return;
         }
         const MAX_DOC = 50000;
-        const text = raw.length > MAX_DOC ? raw.slice(0, MAX_DOC) + `\n\n[... truncated — file was ${raw.length} characters ...]` : raw;
-        setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type || "text/plain", size: f.size, dataUrl: "", text }]);
+        const doctext = raw.length > MAX_DOC ? raw.slice(0, MAX_DOC) + `\n\n[... truncated — file was ${raw.length} characters ...]` : raw;
+        setAttachments((p) => [...p, { id: uid(), name: f.name, type: f.type || "text/plain", size: f.size, dataUrl: "", text: doctext }]);
       };
       r.readAsText(f);
     }
@@ -130,7 +158,6 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
     r.start(); recogRef.current = r; setListening(true);
   };
 
-  const isPro = tier === "pro";
   const coarse = (() => { try { return window.matchMedia && window.matchMedia("(pointer: coarse)").matches; } catch { return false; } })();
 
   return (
@@ -138,22 +165,21 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}>
-      <div className="composer-wrap">
-        {attachments.length > 0 && (
-          <div className="attach-row">
-            {attachments.map((a) => (
-              <span key={a.id} className="attach-chip">
-                {a.type.startsWith("image/") ? <img src={a.dataUrl} alt="" /> : <FileText size={13} />}
-                <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
-                <button onClick={() => setAttachments((p) => p.filter((x) => x.id !== a.id))} aria-label={`Remove ${a.name}`}><X size={12} /></button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className={"composer" + (tall ? " composer-tall" : "")} style={dragOver ? { borderColor: "var(--line-strong)" } : undefined}>
-          <input ref={fileRef} type="file" multiple hidden
-            onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
-          <button className="circle-btn" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Add files — or just paste a screenshot"><Plus size={19} /></button>
+      <div className="composer" style={dragOver ? { borderColor: "var(--line2)" } : undefined}>
+        <div className="pending-files">
+          {attachments.map((a) => (
+            <span key={a.id} className="pf">
+              {a.type.startsWith("image/") && a.dataUrl
+                ? <img src={a.dataUrl} alt="" />
+                : <FileText size={11} />}
+              <span className="pf-name">{a.name} · {fmtSize(a.size)}</span>
+              <button onClick={() => setAttachments((p) => p.filter((x) => x.id !== a.id))} aria-label={`Remove ${a.name}`}><X size={10} /></button>
+            </span>
+          ))}
+        </div>
+        <input ref={fileRef} type="file" multiple hidden
+          onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
+        <div className="write">
           <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
@@ -161,24 +187,39 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
               else if (!coarse && !settings.enterToSend && (e.metaKey || e.ctrlKey)) { e.preventDefault(); doSend(); }
             }}
             placeholder="Ask Luca anything" aria-label="Message Luca" />
-          <button className={`pro-btn ${isPro ? "on" : ""}`} onClick={() => onTierChange(isPro ? "flash" : "pro")} aria-pressed={isPro} title="Toggle Pro reasoning">
-            <Brain size={14} /><span>Pro</span>
-          </button>
-          <button className="circle-btn mic-btn" onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" style={listening ? { color: "var(--danger)" } : undefined}>
-            <Mic size={17} />
-          </button>
-          {streaming ? (
-            <button className="circle-btn send-btn" onClick={onStop} aria-label="Stop generating"><Square size={14} fill="currentColor" strokeWidth={0} /></button>
-          ) : (
-            <button className="circle-btn send-btn" onClick={doSend} disabled={!canSend} aria-label="Send message">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
-              </svg>
-            </button>
-          )}
         </div>
-        <div className="fineprint">luca can make mistakes. double check the important stuff</div>
+        <div className="tools">
+          <div className="left">
+            <button className="tool" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Attach files"><Plus size={15} /></button>
+            <button className={`tool${listening ? " listening" : ""}`} onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" title="Voice input"><Mic size={15} /></button>
+            <div ref={modelRef} className={`model-ctl${modelOpen ? " open" : ""}`}
+              onClick={() => setModelOpen((v) => !v)}
+              role="button" tabIndex={0} aria-expanded={modelOpen} aria-label={`Model: ${TIER_LABEL[tier]}. Activate to change.`}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModelOpen((v) => !v); } }}>
+              {(["flash", "pro"] as const).map((t) => (
+                <button key={t} className={`seg${tier === t ? " selected" : ""}`}
+                  aria-pressed={tier === t} tabIndex={modelOpen ? 0 : -1}
+                  onClick={(e) => { e.stopPropagation(); pickModel(t); }}>
+                  {TIER_LABEL[t]}
+                </button>
+              ))}
+              <span className="chev" aria-hidden="true"><ChevronDown size={11} /></span>
+            </div>
+          </div>
+          <div className="right">
+            {streaming ? (
+              <button className="send" onClick={onStop} aria-label="Stop generating" title="Stop">
+                <Square size={13} fill="currentColor" strokeWidth={0} />
+              </button>
+            ) : (
+              <button className="send" onClick={doSend} disabled={!canSend} aria-label="Send message" title="Send">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M12 19V5m0 0-6 6m6-6 6 6" /></svg>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
+      <div className="fineprint">luca can make mistakes. double check the important stuff</div>
     </div>
   );
 }

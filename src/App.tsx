@@ -5,7 +5,6 @@ import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
 import Composer from "./components/Composer";
 import Auth from "./components/Auth";
-import { Landing } from "./pages";
 const ArtifactPanel = lazy(() => import("./components/ArtifactPanel"));
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +22,14 @@ import {
 } from "./lib/store";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
 
+function greetWord(): string {
+  const h = new Date().getHours();
+  if (h < 5) return "Still up";
+  if (h < 12) return "Morning";
+  if (h < 18) return "Afternoon";
+  return "Evening";
+}
+
 // Inline document/code attachments as text blocks so the model actually
 // receives them. Images travel as image_url parts; everything else must be
 // text here or it is silently dropped.
@@ -36,7 +43,7 @@ function docBlockFor(atts?: Attachment[]): string {
 
 
 
-export default function App({ namespace }: { namespace: string }) {
+export default function App({ namespace: _namespace }: { namespace: string }) {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsReady, setSessionsReady] = useState(false);
@@ -68,7 +75,6 @@ export default function App({ namespace }: { namespace: string }) {
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
   const [composerDraft, setComposerDraft] = useState<string | null>(null);
-  const [enterAuth, setEnterAuth] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
 
@@ -84,6 +90,9 @@ export default function App({ namespace }: { namespace: string }) {
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { themeRef.current = settings.theme; }, [settings.theme]);
+  useEffect(() => {
+    document.body.classList.toggle("no-times", !settings.showTimestamps);
+  }, [settings.showTimestamps]);
 
   // Sonner toasts: persistent live region, real announcements, dismissable.
   const toast = useCallback((text: string) => {
@@ -178,6 +187,16 @@ export default function App({ namespace }: { namespace: string }) {
     return () => window.clearTimeout(t);
   }, [artifacts, storageFullToast]);
   const openArtifact = useCallback((id: string) => { setActiveArtifactId(id); }, []);
+  const clearAllChats = useCallback(() => {
+    // Real clear: wipe local state AND the server record (source of truth).
+    abortRef.current?.abort();
+    setSessions([]);
+    setActiveId(null);
+    void saveSessions([], storageFullToast);
+    const t = loadToken();
+    if (authUser && t) void putUserData(t, { sessions: [], activeId: null, settings, tier, profile });
+    toast("All chats cleared");
+  }, [authUser, settings, tier, profile, toast, storageFullToast]);
   useEffect(() => {
     if (!sessionsReady) return;
     window.clearTimeout(saveTimer.current);
@@ -418,6 +437,8 @@ export default function App({ namespace }: { namespace: string }) {
         return { role: "user", content: text };
       });
 
+  // Model choice is PER-CHAT and persists on the chat record. New chats
+  // inherit the global default; the composer control edits the open chat.
   const sendMessage = useCallback((text: string, attachments: Attachment[]) => {
     if (streamingRef.current) return;
     let sid = activeIdRef.current;
@@ -425,11 +446,13 @@ export default function App({ namespace }: { namespace: string }) {
     const liveSession = sid ? sessionsRef.current.find((s) => s.id === sid) || null : null;
     if (!sid || !liveSession) {
       sid = uid();
-      setSessions((p) => [{ id: sid!, title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), messages: [] }, ...p].slice(0, 500));
+      const chatTier = tier;
+      setSessions((p) => [{ id: sid!, title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), tier: chatTier, messages: [] }, ...p].slice(0, 500));
       setActiveId(sid);
     } else baseMsgs = liveSession.messages;
+    const sendTier = liveSession?.tier || tier;
     const userMsg: LucaMessage = { uid: uid(), role: "user", content: text, ts: Date.now(), attachments: attachments.length ? attachments : undefined };
-    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
+    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: sendTier, streaming: true, toolRounds: [] };
     const id = sid;
     setSessions((p) => p.map((s) => (s.id === id ? { ...s, updatedAt: Date.now(), messages: [...s.messages, userMsg, asstMsg] } : s)));
     // New turn must carry its images as image_url parts (not a plain string),
@@ -441,8 +464,11 @@ export default function App({ namespace }: { namespace: string }) {
     const newUserTurn: ChatMsg = newImgs.length
       ? { role: "user", content: [{ type: "text", text: fullText + "\n[Attached: " + attachments.filter((a) => a.type.startsWith("image/")).map((a) => a.name).join(", ") + "]" }, ...newImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: fullText };
-    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, tier);
+    void runStream(id, asstMsg.uid, [...toHistory(baseMsgs), newUserTurn], text, sendTier);
   }, [tier, runStream]);
+  const setChatTier = useCallback((sid: string, t: Tier) => {
+    setSessions((p) => p.map((s) => (s.id === sid ? { ...s, tier: t } : s)));
+  }, []);
 
   const streamingRef = useRef(isStreaming);
   useEffect(() => { streamingRef.current = isStreaming; }, [isStreaming]);
@@ -459,9 +485,10 @@ export default function App({ namespace }: { namespace: string }) {
     if (!target) return;
     const prev = [...(target.versions || [])];
     if (target.content && !target.streaming && prev[prev.length - 1] !== target.content) prev.push(target.content);
-    const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
+    const rt = s.tier || tier;
+    const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier: rt, streaming: true, toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, fresh] } : x)));
-    void runStream(sid, mu, toHistory(before), lastUser.content, tier);
+    void runStream(sid, mu, toHistory(before), lastUser.content, rt);
   }, [tier, runStream]);
 
   const editAndResend = useCallback((sid: string, mu: string, text: string) => {
@@ -474,7 +501,8 @@ export default function App({ namespace }: { namespace: string }) {
     const orig = s.messages[idx];
     if (!orig || !orig.uid) return;
     const userMsg: LucaMessage = { ...orig, content: text, ts: Date.now() };
-    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier, streaming: true, toolRounds: [] };
+    const et = s.tier || tier;
+    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: et, streaming: true, toolRounds: [] };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, userMsg, asstMsg] } : x)));
     const editImgs = (userMsg.attachments || []).filter((a) => a.type.startsWith("image/"));
     const editDocBlock = docBlockFor(userMsg.attachments);
@@ -482,7 +510,7 @@ export default function App({ namespace }: { namespace: string }) {
     const editUserTurn: ChatMsg = editImgs.length
       ? { role: "user", content: [{ type: "text", text: editFullText }, ...editImgs.map((a) => ({ type: "image_url", image_url: { url: a.dataUrl } }))] }
       : { role: "user", content: editFullText };
-    void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, tier);
+    void runStream(sid, asstMsg.uid, [...toHistory(before), editUserTurn], text, et);
   }, [tier, runStream]);
 
   // Version switcher: re-added in Phase 6 with working controls (was threaded but never called).
@@ -569,12 +597,6 @@ export default function App({ namespace }: { namespace: string }) {
   if (authLoading) {
     return <div className="center-page"><div className="spinner" /></div>;
   }
-  // Signed-out home shows the Landing page first (live model counts), with
-  // Auth one click behind "Start chatting". Decided in Phase 6c over deletion.
-  if (namespace === "home" && !authUser && !guest) {
-    if (!enterAuth) return <Landing onEnter={() => setEnterAuth(true)} />;
-    return <Auth onAuth={handleAuth} onGuest={handleGuest} />;
-  }
   if (!authUser && !guest) return <Auth onAuth={handleAuth} onGuest={handleGuest} />;
   if (authUser && !confirmedUsername(authUser.id) && (!authUser.username || /^(googleuser|githubuser|user\d*$)/i.test(authUser.username))) {
     return (
@@ -639,7 +661,10 @@ export default function App({ namespace }: { namespace: string }) {
   }
 
   return (
-    <div className="app">
+    <div className={`app${collapsed ? " collapsed" : ""}`}>
+      <button className="open-sidebar" onClick={() => { setCollapsed(false); setMobileNav(true); }} aria-label="Open sidebar" title="Open sidebar">
+        <PanelLeft size={16} />
+      </button>
       <Sidebar
         sessions={sessions} activeId={activeId} search={search} onSearch={setSearch}
         onSelect={(id) => switchChat(id)} onNew={() => switchChat(null)}
@@ -652,8 +677,9 @@ export default function App({ namespace }: { namespace: string }) {
           toast("Chat deleted");
         }}
         onOpenSettings={() => setPanel("settings")} onOpenProfile={() => setPanel("profile")}
+        onClearAll={clearAllChats}
         isAdmin={authUser?.isAdmin} onOpenAdmin={() => setPanel("admin")}
-        profile={profile} mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)}
+        authUser={authUser} profile={profile} mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)}
         collapsed={collapsed} onToggleSidebar={() => setCollapsed((v) => !v)}
       />
       <a href="#main" className="skip-link">Skip to chat</a>
@@ -670,7 +696,7 @@ export default function App({ namespace }: { namespace: string }) {
         {isEmpty ? (
           <div className="hero">
             <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
-            <h1 className="hero-greeting">Hi{profile?.name ? ` ${profile.name}` : ""}, what's on your mind?</h1>
+            <h1 className="hero-greeting">{greetWord()}, {(profile?.name || authUser?.name || "there").trim() || "there"} — <em>what are we working on?</em></h1>
             <div className="hero-input">
               <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
                 tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
@@ -682,7 +708,9 @@ export default function App({ namespace }: { namespace: string }) {
               onSuggestion={sendSuggestion} onRegenerate={regenerate}
               onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} onOpenArtifact={openArtifact} />
             <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
-              tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
+              tier={activeSession?.tier || tier}
+              onTierChange={(t) => { if (activeSession) setChatTier(activeSession.id, t); else setTier(t); }}
+              settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
           </>
         )}
       </div>

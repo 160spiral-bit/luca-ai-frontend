@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
-import Logo from "./Logo";
-import type { Profile, Session } from "../lib/store";
+import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, X, PanelLeft } from "lucide-react";
+import type { AuthUser, Profile, Session } from "../lib/store";
+
+function relTime(ts: number): string {
+  const s = (Date.now() - ts) / 1000;
+  if (s < 60) return "now";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
 
 const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "U";
@@ -10,9 +17,10 @@ interface Props {
   sessions: Session[]; activeId: string | null; search: string;
   onSearch: (q: string) => void; onSelect: (id: string) => void; onNew: () => void;
   onRename: (id: string, t: string) => void; onTogglePin: (id: string) => void; onDelete: (id: string) => void;
-  onOpenSettings: () => void; onOpenProfile: () => void;
+  onOpenSettings: () => void; onOpenProfile: () => void; onClearAll: () => void;
   isAdmin?: boolean; onOpenAdmin?: () => void;
-  profile: Profile | null; mobileOpen: boolean; onCloseMobile: () => void;
+  authUser: AuthUser | null; profile: Profile | null;
+  mobileOpen: boolean; onCloseMobile: () => void;
   collapsed: boolean; onToggleSidebar: () => void;
 }
 
@@ -20,9 +28,12 @@ export default function Sidebar(p: Props) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [userMenu, setUserMenu] = useState(false);
+  const [armClear, setArmClear] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const renameRef = useRef<HTMLInputElement | null>(null);
+  const confirmTimer = useRef<number | undefined>(undefined);
 
   const { mobileOpen, onCloseMobile } = p;
   useEffect(() => {
@@ -33,103 +44,141 @@ export default function Sidebar(p: Props) {
   }, [mobileOpen, onCloseMobile]);
   useEffect(() => {
     if (!menuFor) return;
-    const onDoc = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuFor(null); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuFor(null); };
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) { setMenuFor(null); }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenuFor(null); setUserMenu(false); } };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [menuFor]);
+  useEffect(() => {
+    if (!userMenu) return;
+    const onDoc = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setUserMenu(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [userMenu]);
   useEffect(() => { if (renamingId) { renameRef.current?.focus(); renameRef.current?.select(); } }, [renamingId]);
+  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
 
   const q = p.search.trim().toLowerCase();
   const visible = (q ? p.sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q))) : p.sessions)
     .sort((a, b) => Number(b.pinned || false) - Number(a.pinned || false) || (b.updatedAt || 0) - (a.updatedAt || 0));
   const commitRename = () => { if (renamingId && renameValue.trim()) p.onRename(renamingId, renameValue.trim()); setRenamingId(null); };
+  const lastActivity = (s: Session) => s.messages.length ? (s.messages[s.messages.length - 1]?.ts || s.updatedAt || 0) : (s.createdAt || 0);
+
+  const askDelete = (id: string) => {
+    if (confirmingId === id) {
+      window.clearTimeout(confirmTimer.current);
+      setConfirmingId(null);
+      p.onDelete(id);
+      return;
+    }
+    setConfirmingId(id);
+    window.clearTimeout(confirmTimer.current);
+    confirmTimer.current = window.setTimeout(() => setConfirmingId(null), 2500);
+  };
+
+  const displayName = (p.profile?.name || p.authUser?.name || "User").trim() || "User";
 
   return (
     <>
       <div className={`scrim ${p.mobileOpen ? "show" : ""}`} onClick={p.onCloseMobile} aria-hidden="true" />
-      <aside className={`side ${p.collapsed ? "hidden-side" : ""} ${p.mobileOpen ? "mobile-open" : ""}`}>
-        <div className="side-head">
-          <div className="logo">
-            <Logo size={17} />
-            <p>Luca</p>
-          </div>
-          <span style={{ flex: 1 }} />
-          <button className="icon-btn only-desktop" onClick={p.onToggleSidebar} aria-label="Close sidebar"><PanelLeft size={15} /></button>
-          <button className="mobile-close-btn only-mobile" onClick={p.onCloseMobile} aria-label="Close sidebar"><X size={20} /></button>
+      <aside className={`sidebar ${p.collapsed ? "hidden-side" : ""} ${p.mobileOpen ? "mobile-open" : ""}`} aria-label="Sidebar">
+        <div className="sb-head">
+          <button className="wordmark" onClick={() => { p.onNew(); p.onCloseMobile(); }} aria-label="Luca home">Luca</button>
+          <button className="icon-btn only-desktop" onClick={p.onToggleSidebar} aria-label="Collapse sidebar"><PanelLeft size={16} /></button>
+          <button className="icon-btn only-mobile" onClick={p.onCloseMobile} aria-label="Close sidebar"><X size={20} /></button>
         </div>
-        <div className="side-actions">
-          <button className="btn-new" onClick={() => { p.onNew(); p.onCloseMobile(); }}><Plus size={15} />New chat</button>
-        </div>
-        <div className="side-search">
-          <Search size={13} />
+        <button className="new-chat" onClick={() => { p.onNew(); p.onCloseMobile(); }}>
+          <Plus size={14} />New chat
+        </button>
+        <div className="search">
+          <Search size={14} />
           <input value={p.search} onChange={(e) => p.onSearch(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
         </div>
+        <div className="label">Recents</div>
         <nav className="recents" aria-label="Recent chats">
           {visible.length === 0 && (
-            <div className="recents-empty">
-              {q ? `No chats matching "${p.search}"` : "No chats yet"}
-            </div>
+            <div className="empty-recents">{q ? "No chats found" : "No chats yet"}</div>
           )}
-          {visible.length > 0 && <div className="recents-label">Recents</div>}
           {visible.map((s) => (
-                <div key={s.id} style={{ position: "relative" }}>
-                  {renamingId === s.id ? (
-                    <div style={{ display: "flex", gap: 4, padding: "2px 0" }}>
-                      <input ref={renameRef} value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } if (e.key === "Escape") setRenamingId(null); }}
-                        onBlur={commitRename} aria-label="Rename chat"
-                        style={{ flex: 1, minWidth: 0, borderRadius: 999, border: "1px solid var(--line-strong)", background: "var(--surface)", padding: "6px 12px" }} />
-                      <button className="icon-btn" style={{ width: 44, height: 44 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save"><Check size={15} /></button>
-                    </div>
-                  ) : (
-                    <button className={`chat-row ${s.id === p.activeId ? "active" : ""}`} onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}>
-                      <span className="title">{s.title}</span>
-                      {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--ink-3)" }} />}
-                      <span role="button" tabIndex={0} aria-label="Chat options" className={`row-menu icon-btn ${menuFor === s.id ? "open" : ""}`}
-                        onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); setConfirmDelete(null); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); } }}>
-                        <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
-                      </span>
-                    </button>
-                  )}
-                  {menuFor === s.id && (
-                    <div ref={menuRef} className="row-menu-pop" role="menu">
-                      {confirmDelete === s.id ? (
-                        <div style={{ padding: 6 }}>
-                          <div style={{ fontSize: 12, color: "var(--ink-2)", padding: "2px 6px 10px" }}>Delete this chat?</div>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button className="btn-primary" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => { p.onDelete(s.id); setMenuFor(null); setConfirmDelete(null); }}>Delete</button>
-                            <button className="btn-ghost" style={{ padding: "7px 10px", fontSize: 12 }} onClick={() => setConfirmDelete(null)}>Keep</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <button role="menuitem" onClick={() => { p.onTogglePin(s.id); setMenuFor(null); }}>{s.pinned ? <PinOff size={13} /> : <Pin size={13} />}{s.pinned ? "Unpin" : "Pin"}</button>
-                          <button role="menuitem" onClick={() => { setRenamingId(s.id); setRenameValue(s.title); setMenuFor(null); }}><Pencil size={13} />Rename</button>
-                          <button role="menuitem" className="danger" onClick={() => setConfirmDelete(s.id)}><Trash2 size={13} />Delete</button>
-                        </>
-                      )}
-                    </div>
-                  )}
+            <div key={s.id} style={{ position: "relative" }}>
+              {renamingId === s.id ? (
+                <div style={{ display: "flex", gap: 4, padding: "2px 0" }}>
+                  <input ref={renameRef} value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } if (e.key === "Escape") setRenamingId(null); }}
+                    onBlur={commitRename} aria-label="Rename chat"
+                    style={{ flex: 1, minWidth: 0, borderRadius: 8, border: "1px solid var(--line2)", background: "var(--s1)", padding: "6px 10px", fontSize: 13 }} />
+                  <button className="icon-btn" style={{ width: 32, height: 32 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save name"><Check size={14} /></button>
                 </div>
+              ) : (
+                <div
+                  className={`chat-item ${s.id === p.activeId ? "active" : ""} ${confirmingId === s.id ? "confirming" : ""}`}
+                  onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}
+                  role="button" tabIndex={0} aria-label={`Open chat ${s.title}`}
+                  onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) { p.onSelect(s.id); p.onCloseMobile(); } }}
+                >
+                  <span className="title">{s.title}</span>
+                  {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
+                  <time>{relTime(lastActivity(s))}</time>
+                  <button className="del" title="Delete" aria-label={`Delete chat ${s.title}`}
+                    onClick={(e) => { e.stopPropagation(); askDelete(s.id); }}>
+                    <X size={12} />
+                  </button>
+                  <button className="del" title="More options" aria-label="Chat options" style={{ marginLeft: 2 }}
+                    onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
+                    <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
+                  </button>
+                </div>
+              )}
+              {menuFor === s.id && (
+                <div ref={menuRef} className="row-menu-pop" role="menu">
+                  <button role="menuitem" onClick={() => { p.onTogglePin(s.id); setMenuFor(null); }}>{s.pinned ? <PinOff size={13} /> : <Pin size={13} />}{s.pinned ? "Unpin" : "Pin"}</button>
+                  <button role="menuitem" onClick={() => { setRenamingId(s.id); setRenameValue(s.title); setMenuFor(null); }}><Pencil size={13} />Rename</button>
+                </div>
+              )}
+            </div>
           ))}
         </nav>
-        <div className="side-foot">
+        <div className="sb-foot">
           {p.isAdmin && p.onOpenAdmin && (
-            <button onClick={p.onOpenAdmin} style={{ fontWeight: 600 }}><ShieldCheck size={15} />Admin Panel</button>
+            <button className="foot-row" onClick={p.onOpenAdmin}>
+              <ShieldCheck size={14} />Admin Panel
+            </button>
           )}
-          <button onClick={p.onOpenSettings}><SettingsIcon size={15} />Settings</button>
-          <button className="account" onClick={p.onOpenProfile} aria-label="Open profile">
-            {p.profile?.avatar
-              ? <span className="avatar avatar-img" aria-hidden="true"><img src={p.profile.avatar} alt="" /></span>
-              : <span className="avatar" aria-hidden="true">{initials((p.profile?.name || "User").trim())}</span>}
-            <span>
-              <p className="name">{(p.profile?.name || "User").trim() || "User"}</p>
-              <p className="plan">{p.isAdmin ? "Admin" : "Free"}</p>
-            </span>
+          <button className="foot-row" onClick={p.onOpenSettings}>
+            <SettingsIcon size={14} />Settings
           </button>
+          <div className="user-wrap">
+            <button className="foot-row" onClick={() => setUserMenu((v) => !v)} aria-expanded={userMenu} aria-haspopup="menu">
+              <span className="avatar" aria-hidden="true">
+                {p.profile?.avatar ? <img src={p.profile.avatar} alt="" /> : initials(displayName)}
+              </span>
+              <span className="user-meta"><strong>{displayName}</strong><small>{p.isAdmin ? "Admin" : "Free"}</small></span>
+            </button>
+            <div ref={menuRef} className={`user-menu ${userMenu ? "open" : ""}`} role="menu">
+              <button role="menuitem" onClick={() => { setUserMenu(false); p.onOpenProfile(); }}>Profile</button>
+              <button role="menuitem" onClick={() => {
+                setUserMenu(false);
+                const id = p.authUser?.id || "";
+                if (id && navigator.clipboard) void navigator.clipboard.writeText(id);
+              }}>Copy user ID</button>
+              <button role="menuitem" onClick={() => {
+                if (!armClear) {
+                  setArmClear(true);
+                  window.clearTimeout(confirmTimer.current);
+                  confirmTimer.current = window.setTimeout(() => setArmClear(false), 2500);
+                  return;
+                }
+                window.clearTimeout(confirmTimer.current);
+                setArmClear(false); setUserMenu(false); p.onClearAll();
+              }}>{armClear ? "Click again to confirm" : "Clear all chats"}</button>
+              <button role="menuitem" onClick={() => { setUserMenu(false); window.location.hash = "#/about"; }}>About Luca</button>
+            </div>
+          </div>
         </div>
       </aside>
     </>
