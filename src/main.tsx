@@ -23,6 +23,7 @@ function AnimatedRoutes() {
   );
 }
 
+console.log(`[Luca] build ${__BUILD_ID__}`);
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <HashRouter>

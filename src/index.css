@@ -237,7 +237,7 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 
 /* ---------- home / chat layout ---------- */
 .home { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 24px 0; }
-.hero { width: min(660px, 92vw); margin: auto; }
+.hero { width: min(660px, 92vw); margin: auto; align-self: center; }
 .hero h1, h1.hero-greeting {
   font-family: var(--serif); font-size: clamp(28px, 3.6vw, 40px);
   font-weight: 460; line-height: 1.14; letter-spacing: -0.01em;
