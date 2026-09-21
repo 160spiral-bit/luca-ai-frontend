@@ -694,12 +694,14 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
         </header>
         )}
         {isEmpty ? (
-          <div className="hero">
-            <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
-            <h1 className="hero-greeting">{greetWord()}, {(profile?.name || authUser?.name || "there").trim() || "there"} — <em>what are we working on?</em></h1>
-            <div className="hero-input">
-              <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
-                tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
+          <div className="home">
+            <div className="hero">
+              <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
+              <h1 className="hero-greeting">{greetWord()}, {(profile?.name || authUser?.name || "there").trim() || "there"} — <em>what are we working on?</em></h1>
+              <div className="hero-input">
+                <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
+                  tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
+              </div>
             </div>
           </div>
         ) : (
