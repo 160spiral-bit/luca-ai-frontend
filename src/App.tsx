@@ -522,7 +522,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   const isEmpty = !activeSession || activeSession.messages.length === 0;
   const heroRect = useRef<DOMRect | null>(null);
   const sendFromHero = useCallback((text: string, atts: Attachment[]) => {
-    const el = document.querySelector(".hero-input");
+    const el = document.querySelector(".home .composer-zone");
     heroRect.current = el ? el.getBoundingClientRect() : null;
     sendMessage(text, atts);
   }, [sendMessage]);
@@ -698,10 +698,8 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
             <div className="hero">
               <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
               <h1 className="hero-greeting">{greetWord()}, {(profile?.name || authUser?.name || "there").trim() || "there"} — <em>what are we working on?</em></h1>
-              <div className="hero-input">
-                <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
-                  tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
-              </div>
+              <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
+                tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
             </div>
           </div>
         ) : (

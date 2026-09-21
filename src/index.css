@@ -236,15 +236,15 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .user-menu button:hover { background: var(--s2); color: var(--txt); }
 
 /* ---------- home / chat layout ---------- */
-.home { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow-y: auto; padding: 24px 0; }
-.hero { width: min(660px, 92vw); min-width: 0; margin: auto; display: flex; flex-direction: column; align-items: center; }
+.home { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 24px 0; }
+.hero { width: min(660px, 92vw); margin: auto; }
 .hero h1, h1.hero-greeting {
   font-family: var(--serif); font-size: clamp(28px, 3.6vw, 40px);
   font-weight: 460; line-height: 1.14; letter-spacing: -0.01em;
   text-align: center; text-wrap: balance; margin-bottom: 24px; color: var(--txt);
 }
 .hero h1 em, h1.hero-greeting em { font-style: italic; font-weight: 400; color: var(--mut); }
-.hero-input { width: 100%; min-width: 0; }
+.hero .composer-zone { width: 100%; }
 .conv { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .thread-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .thread { flex: 1; overflow-y: auto; min-height: 0; }
@@ -289,7 +289,7 @@ body.no-times .msg-time { display: none; }
 
 /* ---------- composer ---------- */
 .conv .composer-zone { width: min(720px, 92vw); margin: 0 auto; padding: 0 0 18px; }
-.hero .hero-input .composer-zone { width: 100%; margin: 0; padding: 0; }
+.hero .composer-zone { width: 100%; }
 .composer {
   width: 100%; border-radius: 16px;
   background: var(--s1); border: 1px solid var(--line); border-top-color: var(--line2);
@@ -361,7 +361,7 @@ body.no-times .msg-time { display: none; }
 .send:not(:disabled) { background: var(--txt); border-color: var(--txt); color: var(--ink); }
 .send:not(:disabled):hover { opacity: 0.85; }
 .send:disabled { cursor: default; }
-.fineprint { text-align: center; font-size: 11px; color: var(--fnt); padding: 8px 0 0; }
+.disclaimer { text-align: center; font-size: 11px; color: var(--fnt); padding: 8px 0 0; }
 
 /* ---------- overlays / modals ---------- */
 .overlay, .scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.55); display: none; place-items: center; }
@@ -668,7 +668,7 @@ body.no-times .msg-time { display: none; }
   .only-desktop { display: none !important; }
   .artifact-panel { width: 100vw; max-width: 100vw; }
   .conv .composer-zone { width: 94vw; }
-  .hero .hero-input .composer-zone { width: 100%; }
+  .hero .composer-zone { width: 100%; }
   .thread-inner, .msgs { width: 94vw; padding: 24px 0 16px; }
   .bubble { max-width: 88%; }
   .luca-auth-right { display: none; }

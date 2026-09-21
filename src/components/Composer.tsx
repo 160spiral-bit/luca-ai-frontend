@@ -219,7 +219,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
           </div>
         </div>
       </div>
-      <div className="fineprint">luca can make mistakes. double check the important stuff</div>
+      <p className="disclaimer">luca can make mistakes. double check the important stuff</p>
     </div>
   );
 }
