@@ -236,15 +236,15 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .user-menu button:hover { background: var(--s2); color: var(--txt); }
 
 /* ---------- home / chat layout ---------- */
-.home { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow-y: auto; padding: 24px 0; }
-.hero { width: min(660px, 92vw); margin: auto 0; display: flex; flex-direction: column; align-items: center; }
+.home { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow-y: auto; padding: 24px 0; }
+.hero { width: min(660px, 92vw); min-width: 0; margin: auto; display: flex; flex-direction: column; align-items: center; }
 .hero h1, h1.hero-greeting {
   font-family: var(--serif); font-size: clamp(28px, 3.6vw, 40px);
   font-weight: 460; line-height: 1.14; letter-spacing: -0.01em;
   text-align: center; text-wrap: balance; margin-bottom: 24px; color: var(--txt);
 }
 .hero h1 em, h1.hero-greeting em { font-style: italic; font-weight: 400; color: var(--mut); }
-.hero-input { width: 100%; }
+.hero-input { width: 100%; min-width: 0; }
 .conv { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .thread-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; }
 .thread { flex: 1; overflow-y: auto; min-height: 0; }
