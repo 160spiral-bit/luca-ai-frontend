@@ -703,7 +703,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
             </div>
           </div>
         ) : (
-          <>
+          <div className="conv">
             <ChatArea session={activeSession} profile={profile} settings={settings}
               onSuggestion={sendSuggestion} onRegenerate={regenerate}
               onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} onOpenArtifact={openArtifact} />
@@ -711,7 +711,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
               tier={activeSession?.tier || tier}
               onTierChange={(t) => { if (activeSession) setChatTier(activeSession.id, t); else setTier(t); }}
               settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
-          </>
+          </div>
         )}
       </div>
 
