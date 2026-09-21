@@ -187,6 +187,30 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
     return () => window.clearTimeout(t);
   }, [artifacts, storageFullToast]);
   const openArtifact = useCallback((id: string) => { setActiveArtifactId(id); }, []);
+  // TEMPORARY layout debugger (?debug=layout): outlines each container and
+  // prints real rects so centering can be verified without guesswork.
+  useEffect(() => {
+    let qs: URLSearchParams | null = null;
+    try { qs = new URLSearchParams(window.location.search); } catch { return; }
+    if (!qs || !String(qs.get("debug") || "").includes("layout")) return;
+    const t = window.setTimeout(() => {
+      const colors = ["red", "lime", "cyan", "magenta", "orange", "yellow"];
+      const sels = [".sidebar", ".main", ".home", ".conv", ".hero", ".hero .composer-zone", ".conv .composer-zone", ".composer", ".thread-inner"];
+      const rows = sels.map((sel, i) => {
+        const el = document.querySelector(sel) as HTMLElement | null;
+        if (!el) return { sel, status: "MISSING" };
+        const r = el.getBoundingClientRect();
+        el.style.outline = `2px solid ${colors[i % colors.length]}`;
+        return {
+          sel, left: Math.round(r.left), width: Math.round(r.width),
+          center: Math.round(r.left + r.width / 2), display: getComputedStyle(el).display,
+        };
+      });
+      console.table(rows);
+      console.log("VIEWPORT", window.innerWidth);
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, []);
   const clearAllChats = useCallback(() => {
     // Real clear: wipe local state AND the server record (source of truth).
     abortRef.current?.abort();
