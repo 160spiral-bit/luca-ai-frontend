@@ -76,6 +76,16 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+// Wall-clock response time for the message footer ("45s", "3m 26s", "1h 2m").
+function fmtDur(ms?: number): string | null {
+  if (!ms || ms <= 0) return null;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${Math.max(1, s)}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 // Re-parse streaming text at ~30fps instead of per token.
 function useThrottled<T>(value: T, ms = 33): T {
   const [v, setV] = useState(value);
@@ -117,6 +127,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
   })();
   const isContentError = !!shown && /The model didn't return a response|All models are rate-limited/i.test(shown.trim());
   const copyThis = async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
+  const dur = fmtDur(msg.elapsedMs ?? msg.thinkingMs);
   // While streaming with no content yet: thinking indicator only.
   if (msg.streaming && !display) {
     return (
@@ -136,9 +147,6 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         {isContentError ? null : shown ? (
           <div className="bubble">
             <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense>
-            <button className="copy-btn" onClick={copyThis} aria-label="Copy message" title="Copy">
-              {copied ? <Check size={12} /> : <Copy size={12} />}
-            </button>
           </div>
         ) : (!msg.reasoning && msg.streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null)}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
@@ -185,11 +193,23 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         )}
         {!msg.streaming && (shown || msg.error) && (
           <div className="msg-meta">
+            <button className="icon-btn" aria-label="Copy message" title="Copy" onClick={copyThis}>
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+            </button>
             {msg.tier && (
-              <span className="model-tag" title={msg.modelMeta?.pinned ? "Admin-pinned model" : "Active model"}>
-                <span className="model-dot" aria-hidden="true" />
-                {msg.modelMeta?.pinned ? `${msg.modelMeta.provider}/${msg.modelMeta.model}` : `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}`}
-              </span>
+              <>
+                <span className="msg-sep" aria-hidden="true">·</span>
+                <span className="model-tag" title={msg.modelMeta?.pinned ? "Admin-pinned model" : "Active model"}>
+                  <span className="model-dot" aria-hidden="true" />
+                  {msg.modelMeta?.pinned ? `${msg.modelMeta.provider}/${msg.modelMeta.model}` : `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}`}
+                </span>
+              </>
+            )}
+            {dur && (
+              <>
+                <span className="msg-sep" aria-hidden="true">·</span>
+                <span className="msg-dur" title="Response time">{dur}</span>
+              </>
             )}
             {!msg.streaming && msg.artifactIds && msg.artifactIds.length > 0 && (
               <span className="artifact-links">
@@ -258,9 +278,6 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
     <div className="msg msg-user">
       <div className="bubble">
         <Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense>
-        <button className="copy-btn" onClick={copyThis} aria-label="Copy message" title="Copy">
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-        </button>
       </div>
       {(msg.attachments?.length || 0) > 0 && (
         <div className="att-chips">
@@ -275,6 +292,9 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
       <div className="msg-time">{fmtTime(msg.ts)}</div>
       <div className="msg-meta hover-only">
         <span className="msg-actions">
+          <button className="icon-btn" aria-label="Copy message" title="Copy" onClick={copyThis}>
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+          </button>
           <button className="icon-btn" aria-label="Edit and resend" onClick={() => { setDraft(msg.content); setEditing(true); }}>
             <Pencil size={13} />
           </button>

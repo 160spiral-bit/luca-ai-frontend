@@ -267,14 +267,6 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .msg-luca .bubble { background: none; border: none; padding: 0 2px; max-width: 100%; }
 .msg-time { font-size: 10.5px; color: var(--fnt); margin-top: 5px; }
 body.no-times .msg-time { display: none; }
-.copy-btn {
-  position: absolute; top: -14px; right: 0;
-  width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 7px;
-  background: var(--card); color: var(--fnt);
-  display: none; place-items: center; cursor: pointer;
-}
-.msg:hover .copy-btn { display: grid; }
-.copy-btn:hover { color: var(--txt); border-color: var(--line2); }
 .typing { display: inline-flex; gap: 5px; padding: 6px 2px; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--mut); animation: tdot 1.2s ease-in-out infinite; }
 .typing i:nth-child(2) { animation-delay: 0.15s; }
@@ -369,6 +361,7 @@ body.no-times .msg-time { display: none; }
 .overlay, .scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.55); display: none; place-items: center; }
 .overlay.open, .scrim.show { display: grid; }
 .modal, .panel {
+  position: fixed; inset: 0; margin: auto; height: fit-content; z-index: 51;
   width: min(420px, 92vw); max-height: min(84dvh, 720px); overflow-y: auto;
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); padding: 22px;
@@ -515,6 +508,8 @@ body.no-times .msg-time { display: none; }
 .msg-actions { display: inline-flex; gap: 2px; }
 .model-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fnt); }
 .model-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--fnt); }
+.msg-sep { color: var(--fnt); opacity: 0.6; user-select: none; }
+.msg-dur { font-size: 11px; color: var(--fnt); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sources-pill-wrap { margin-top: 8px; }
 .sources-pill {
   display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px;

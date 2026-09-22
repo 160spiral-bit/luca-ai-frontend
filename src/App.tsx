@@ -400,7 +400,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
           case "done": break;
         }
       }
-      patchMsg(sid, auid, { streaming: false, thinkingMs: reasoning ? (firstContentAt || Date.now()) - startedAt : undefined });
+      patchMsg(sid, auid, { streaming: false, thinkingMs: reasoning ? (firstContentAt || Date.now()) - startedAt : undefined, elapsedMs: Date.now() - startedAt });
       commitVersion(sid, auid, acc);
       // Follow-up chips: only for clean completions with substance. Applied
       // only if this message is still the latest (conversation didn't move on).
@@ -416,13 +416,14 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        patchMsg(sid, auid, { streaming: false, interrupted: true });
+        patchMsg(sid, auid, { streaming: false, interrupted: true, elapsedMs: Date.now() - startedAt });
         commitVersion(sid, auid, acc);
       } else {
         const stalled = e instanceof DOMException && e.name === "TimeoutError";
         const raw = e instanceof Error ? e.message : "Something went wrong.";
         patchMsg(sid, auid, {
           streaming: false,
+          elapsedMs: Date.now() - startedAt,
           error: stalled
             ? "Stream stalled — the backend stopped responding. Hit Retry to continue."
             : /failed to fetch|networkerror|load failed|typeerror/i.test(raw) ? "Backend not reachable — try again in a moment." : raw,

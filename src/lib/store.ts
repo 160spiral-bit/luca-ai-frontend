@@ -10,7 +10,7 @@ export interface Source { id: number; url: string; domain: string; title: string
 export interface SearchInfo { query: string; reason: string; count: number; }
 export interface LucaMessage {
   uid: string; role: Role; content: string; ts: number;
-  tier?: Tier; reasoning?: string; thinkingMs?: number;
+  tier?: Tier; reasoning?: string; thinkingMs?: number; elapsedMs?: number;
   stage?: string; stageLabel?: string;
   sources?: Source[]; searchInfo?: SearchInfo; followups?: string[];
   toolRounds?: ToolRound[]; attachments?: Attachment[];
