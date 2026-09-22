@@ -169,7 +169,8 @@ export async function* streamChat(opts: {
             if (tc?.function) {
               let query = "";
               try {
-                const a = JSON.parse(tc.function.arguments || "{}");
+                const rawArgs = tc.function.arguments;
+                const a = typeof rawArgs === "string" ? JSON.parse(rawArgs || "{}") : (rawArgs || {});
                 query = a.query || a.q || a.url || (typeof a.code === "string" ? a.code.slice(0, 120) : "") || "";
               } catch { /* non-JSON tool args — query stays empty */ }
               q.push({ kind: "tool-start", roundId: tc.id || "call_" + uid(), name: tc.function.name || "", query });
