@@ -193,14 +193,18 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         )}
         {!msg.streaming && (shown || msg.error) && (
           <div className="msg-meta">
-            <button className="icon-btn" aria-label="Copy message" title="Copy" onClick={copyThis}>
-              {copied ? <Check size={13} /> : <Copy size={13} />}
-            </button>
+            <span className="msg-actions">
+              <button className="icon-btn" aria-label="Copy message" title="Copy" onClick={copyThis}>
+                {copied ? <Check size={13} /> : <Copy size={13} />}
+              </button>
+              <button className="icon-btn" aria-label="Regenerate" title="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
+                <RefreshCw size={13} />
+              </button>
+            </span>
             {msg.tier && (
               <>
                 <span className="msg-sep" aria-hidden="true">·</span>
                 <span className="model-tag" title={msg.modelMeta?.pinned ? "Admin-pinned model" : "Active model"}>
-                  <span className="model-dot" aria-hidden="true" />
                   {msg.modelMeta?.pinned ? `${msg.modelMeta.provider}/${msg.modelMeta.model}` : `Luca ${msg.tier === "flash" ? "Flash" : "Pro"}`}
                 </span>
               </>
@@ -231,11 +235,6 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
                 </button>
               </span>
             )}
-            <span className="msg-actions">
-              <button className="icon-btn" aria-label="Regenerate" onClick={() => onRegenerate(session.id, msg.uid)}>
-                <RefreshCw size={13} />
-              </button>
-            </span>
           </div>
         )}
         {isLast && !msg.streaming && msg.followups && msg.followups.length > 0 && (

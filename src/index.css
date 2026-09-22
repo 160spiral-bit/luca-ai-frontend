@@ -183,14 +183,14 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .chat-item.active { background: var(--s1); color: var(--txt); }
 .chat-item.active::before { content: ""; position: absolute; left: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--txt); }
 .chat-item .del {
-  display: none; width: 20px; height: 20px; margin-left: 6px;
+  display: grid; visibility: hidden; width: 20px; height: 20px; margin-left: 6px;
   border: none; border-radius: 5px; background: none; color: var(--fnt);
   place-items: center; cursor: pointer; flex-shrink: 0;
 }
-.chat-item:hover .del { display: grid; }
+.chat-item:hover .del { visibility: visible; }
 .chat-item .del:hover { color: var(--danger); background: var(--danger-soft); }
 .chat-item.confirming { background: var(--danger-soft); color: var(--danger); }
-.chat-item.confirming .del { display: grid; color: var(--danger); }
+.chat-item.confirming .del { visibility: visible; color: var(--danger); }
 .row-menu-pop {
   position: absolute; right: 4px; top: calc(100% + 2px); z-index: 30;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -254,11 +254,19 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .thread::-webkit-scrollbar, .msgs::-webkit-scrollbar, .recents::-webkit-scrollbar { width: 3px; }
 .thread::-webkit-scrollbar-thumb, .msgs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 .msg { margin-bottom: 26px; display: flex; flex-direction: column; }
-.msg-user { align-items: flex-end; }
+.msg-user { align-items: flex-end; position: relative; }
 .msg .who { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--mut); margin-bottom: 6px; }
 .msg-user .who { display: none; }
 .msg .hover-only { display: none; }
 .msg:hover .hover-only { display: inline-flex; }
+/* User hover actions float over the gap below the message so appearing
+   never pushes the next message down. */
+.msg-user .msg-meta.hover-only {
+  position: absolute; top: 100%; right: 0; z-index: 5;
+  margin: 2px 0 0; padding: 2px 4px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: var(--shadow);
+}
 .bubble {
   max-width: 78%; padding: 11px 15px; border-radius: 14px;
   font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; position: relative;
@@ -507,7 +515,6 @@ body.no-times .msg-time { display: none; }
 .msg-meta { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; color: var(--fnt); flex-wrap: wrap; }
 .msg-actions { display: inline-flex; gap: 2px; }
 .model-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fnt); }
-.model-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--fnt); }
 .msg-sep { color: var(--fnt); opacity: 0.6; user-select: none; }
 .msg-dur { font-size: 11px; color: var(--fnt); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sources-pill-wrap { margin-top: 8px; }
