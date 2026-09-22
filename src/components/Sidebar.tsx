@@ -124,11 +124,11 @@ export default function Sidebar(p: Props) {
                   <span className="title">{s.title}</span>
                   {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
                   <time>{relTime(lastActivity(s))}</time>
-                  <button className="del" title="Delete" aria-label={`Delete chat ${s.title}`}
+                  <button className="del del-delete" title="Delete" aria-label={`Delete chat ${s.title}`}
                     onClick={(e) => { e.stopPropagation(); askDelete(s.id); }}>
                     <X size={12} />
                   </button>
-                  <button className="del" title="More options" aria-label="Chat options" style={{ marginLeft: 2 }}
+                  <button className="del del-more" title="More options" aria-label="Chat options"
                     onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
                     <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
                   </button>
