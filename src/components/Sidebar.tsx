@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, X, PanelLeft } from "lucide-react";
+import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
 import type { AuthUser, Profile, Session } from "../lib/store";
 
 function relTime(ts: number): string {
@@ -28,7 +28,7 @@ export default function Sidebar(p: Props) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Session | null>(null);
   const [userMenu, setUserMenu] = useState(false);
   const [armClear, setArmClear] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -69,17 +69,12 @@ export default function Sidebar(p: Props) {
   const commitRename = () => { if (renamingId && renameValue.trim()) p.onRename(renamingId, renameValue.trim()); setRenamingId(null); };
   const lastActivity = (s: Session) => s.messages.length ? (s.messages[s.messages.length - 1]?.ts || s.updatedAt || 0) : (s.createdAt || 0);
 
-  const askDelete = (id: string) => {
-    if (confirmingId === id) {
-      window.clearTimeout(confirmTimer.current);
-      setConfirmingId(null);
-      p.onDelete(id);
-      return;
-    }
-    setConfirmingId(id);
-    window.clearTimeout(confirmTimer.current);
-    confirmTimer.current = window.setTimeout(() => setConfirmingId(null), 2500);
-  };
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setConfirmDelete(null); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); };
+  }, [confirmDelete]);
 
   const displayName = (p.profile?.name || p.authUser?.name || "User").trim() || "User";
 
@@ -116,7 +111,7 @@ export default function Sidebar(p: Props) {
                 </div>
               ) : (
                 <div
-                  className={`chat-item ${s.id === p.activeId ? "active" : ""} ${confirmingId === s.id ? "confirming" : ""}`}
+                  className={`chat-item ${s.id === p.activeId ? "active" : ""}`}
                   onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}
                   role="button" tabIndex={0} aria-label={`Open chat ${s.title}`}
                   onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) { p.onSelect(s.id); p.onCloseMobile(); } }}
@@ -125,8 +120,8 @@ export default function Sidebar(p: Props) {
                   {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
                   <time>{relTime(lastActivity(s))}</time>
                   <button className="del del-delete" title="Delete" aria-label={`Delete chat ${s.title}`}
-                    onClick={(e) => { e.stopPropagation(); askDelete(s.id); }}>
-                    <X size={12} />
+                    onClick={(e) => { e.stopPropagation(); setConfirmDelete(s); }}>
+                    <Trash2 size={12} />
                   </button>
                   <button className="del del-more" title="More options" aria-label="Chat options"
                     onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
@@ -181,6 +176,25 @@ export default function Sidebar(p: Props) {
           </div>
         </div>
       </aside>
+      {confirmDelete && (
+        <div className="overlay open" onClick={() => setConfirmDelete(null)}>
+          <div className="modal" role="alertdialog" aria-modal="true" aria-label="Delete chat" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head"><h2>Delete chat?</h2></div>
+            <p style={{ fontSize: 13.5, color: "var(--mut)", margin: "0 0 18px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              “{confirmDelete.title}” will be gone for good.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn-ghost" style={{ width: "auto", padding: "9px 18px" }} onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button
+                className="btn-ghost btn-danger" style={{ width: "auto", padding: "9px 18px" }}
+                onClick={() => { p.onDelete(confirmDelete.id); setConfirmDelete(null); }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

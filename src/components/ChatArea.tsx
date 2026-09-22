@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import { copyText } from "../lib/store";
-import type { LucaMessage, Session, Settings, Profile, ToolRound } from "../lib/store";
+import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
 
 interface Props {
   session: Session | null; profile: Profile | null; settings: Settings;
@@ -34,42 +34,78 @@ function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: st
   );
 }
 
-export function ThinkingIndicator({ currentLabel, isDone, reasoningTrace }: { currentLabel: string; isDone: boolean; reasoningTrace: string[] }) {
+// Unified live-process view: thinking, stages and tool calls blended into a
+// single timeline card instead of separate blocks. Rounds stuck "running"
+// after the stream ended (declared but never executed) render as done.
+function ProcessView({ msg }: { msg: LucaMessage }) {
   const [expanded, setExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
+  const streaming = !!msg.streaming;
   useEffect(() => {
-    if (isDone) return;
+    if (!streaming) return;
+    startRef.current = Date.now();
+    setElapsed(0);
     const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
     return () => window.clearInterval(id);
-  }, [isDone]);
+  }, [streaming, msg.uid]);
+  const trace = (msg.reasoning || "").split(/\n+/).filter(Boolean);
+  const rounds = msg.toolRounds || [];
+  const running = rounds.filter((r) => r.status === "running" && streaming);
+  const live = streaming && (!msg.content || running.length > 0);
+  const shown = expanded || live;
+  const doneCount = rounds.filter((r) => r.status !== "running" || !streaming).length;
+  const toolMs = rounds.reduce((a, r) => a + (r.ms || 0), 0);
+  if (!streaming && !trace.length && !rounds.length) return null;
+  let label: string;
+  if (streaming) {
+    if (msg.stageLabel) label = msg.stageLabel;
+    else if (running.length) label = `Using ${running.map((r) => prettyToolName(r.name)).join(", ")}`;
+    else if (!msg.content) label = "Thinking";
+    else label = "Working";
+  } else {
+    const bits: string[] = [];
+    if (trace.length) bits.push(`Thought for ${Math.max(1, Math.round((msg.thinkingMs || 1000) / 1000))}s`);
+    if (rounds.length) {
+      const dur = fmtDur(toolMs);
+      bits.push(`Used ${doneCount} tool${doneCount === 1 ? "" : "s"}${dur ? ` · ${dur}` : ""}`);
+    }
+    label = bits.join(" · ") || "Process";
+  }
   return (
-    <div className="thinking">
-      <button className="thinking__header" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-        <span className={`thinking-label ${isDone ? "thinking-label--done" : ""}`}>{currentLabel}</span>
-        <span className="thinking__meta">
-          {!isDone && <>{elapsed}s</>}
-          <ChevronDown size={14} className={`thinking__chevron ${expanded ? "thinking__chevron--open" : ""}`} />
-        </span>
+    <div className="process">
+      <button className="process-head" onClick={() => setExpanded((v) => !v)} aria-expanded={shown}>
+        {streaming ? <span className="tool-spin" aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+        <span className="process-label">{label}{streaming ? ` · ${elapsed}s` : ""}</span>
+        <ChevronDown size={13} className={`thinking__chevron ${shown ? "thinking__chevron--open" : ""}`} aria-hidden="true" />
       </button>
-      {expanded && reasoningTrace.length > 0 && (
-        <div className="thinking__trace">{reasoningTrace.map((line, i) => <p key={i} className="thinking__trace-line">{line}</p>)}</div>
+      {shown && (
+        <div className="process-body">
+          {trace.length > 0 && (
+            <div className="process-trace">
+              {trace.map((line, i) => <p key={i} className="thinking__trace-line">{line}</p>)}
+            </div>
+          )}
+          {rounds.map((r) => (
+            <div key={r.id} className="tool-row">
+              {r.status === "running" && streaming
+                ? <span className="tool-spin" aria-hidden="true" />
+                : <Check size={12} aria-hidden="true" />}
+              <div className="tool-row-main">
+                <div className="tool-row-top">
+                  <strong>{prettyToolName(r.name)}</strong>
+                  {r.ms ? <span>{(r.ms / 1000).toFixed(1)}s</span> : null}
+                </div>
+                {r.query ? <div className="tool-query">{r.query}</div> : null}
+                {r.result ? <div className="tool-result">{r.result}</div> : null}
+                {!!r.sources?.length && <div className="tool-sources">{r.sources.length} source{r.sources.length === 1 ? "" : "s"}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
-}
-
-function Thinking({ reasoning, streaming, thinkingMs, stageLabel }: { reasoning?: string; streaming?: boolean; thinkingMs?: number; stageLabel?: string }) {
-  if (streaming) {
-    const trace = reasoning ? reasoning.split(/\n+/).filter(Boolean) : [];
-    const label = stageLabel || "Thinking…";
-    return <ThinkingIndicator currentLabel={label} isDone={false} reasoningTrace={trace} />;
-  }
-  if (!reasoning) return null;
-  const secs = Math.max(1, Math.round((thinkingMs || 1000) / 1000));
-  const trace = reasoning.split(/\n+/).filter(Boolean);
-  // Done state: use the shimmer indicator in its completed form
-  return <ThinkingIndicator currentLabel={`Thought for ${secs}s`} isDone={true} reasoningTrace={trace} />;
 }
 
 function fmtTime(ts: number): string {
@@ -93,49 +129,6 @@ function prettyToolName(name: string): string {
   const p = name.split("__");
   if (p[0] === "mcp" && p.length >= 3) return `${p[1]}/${p.slice(2).join("__")}`;
   return name || "tool";
-}
-
-// Live tool-process view: running tools stream in with a spinner, finished
-// ones collapse into a "Used N tools · Xs" summary. Rounds stuck "running"
-// after the stream ended (tool declared but never executed) render as done.
-function ToolActivity({ rounds, streaming }: { rounds: ToolRound[]; streaming?: boolean }) {
-  const [open, setOpen] = useState(false);
-  if (!rounds.length) return null;
-  const live = !!streaming && rounds.some((r) => r.status === "running");
-  const shown = open || live;
-  const doneCount = rounds.filter((r) => r.status !== "running" || !streaming).length;
-  const totalMs = rounds.reduce((a, r) => a + (r.ms || 0), 0);
-  const dur = fmtDur(totalMs);
-  const runningNames = rounds.filter((r) => r.status === "running" && streaming).map((r) => prettyToolName(r.name));
-  return (
-    <div className="tool-activity">
-      <button className="tool-activity-head" onClick={() => setOpen((v) => !v)} aria-expanded={shown}>
-        {live ? <span className="tool-spin" aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-        <span>{live ? `Using ${runningNames.join(", ") || "tools"}…` : `Used ${doneCount} tool${doneCount === 1 ? "" : "s"}${dur ? ` · ${dur}` : ""}`}</span>
-        <ChevronDown size={13} className={`thinking__chevron ${shown ? "thinking__chevron--open" : ""}`} aria-hidden="true" />
-      </button>
-      {shown && (
-        <div className="tool-activity-body">
-          {rounds.map((r) => (
-            <div key={r.id} className="tool-row">
-              {r.status === "running" && streaming
-                ? <span className="tool-spin" aria-hidden="true" />
-                : <Check size={12} aria-hidden="true" />}
-              <div className="tool-row-main">
-                <div className="tool-row-top">
-                  <strong>{prettyToolName(r.name)}</strong>
-                  {r.ms ? <span>{(r.ms / 1000).toFixed(1)}s</span> : null}
-                </div>
-                {r.query ? <div className="tool-query">{r.query}</div> : null}
-                {r.result ? <div className="tool-result">{r.result}</div> : null}
-                {!!r.sources?.length && <div className="tool-sources">{r.sources.length} source{r.sources.length === 1 ? "" : "s"}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // Re-parse streaming text at ~30fps instead of per token.
@@ -183,23 +176,19 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
   const shownTrimmed = typeof shown === "string" ? shown.replace(/\s+$/, "") : shown;
   const copyThis = async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
   const dur = fmtDur(msg.elapsedMs ?? msg.thinkingMs);
-  // While streaming with no content yet: thinking indicator only.
+  // While streaming with no content yet: live process view only.
   if (msg.streaming && !display) {
     return (
       <div className="msg msg-luca">
         <div className="who">Luca</div>
-        <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
-        {!!msg.toolRounds?.length && <ToolActivity rounds={msg.toolRounds} streaming={msg.streaming} />}
+        <ProcessView msg={msg} />
       </div>
     );
   }
   return (
     <div className="msg msg-luca" aria-busy={msg.streaming || undefined}>
       <div className="who">Luca</div>
-        {!msg.streaming && (
-          <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
-        )}
-        {!!msg.toolRounds?.length && <ToolActivity rounds={msg.toolRounds} streaming={msg.streaming} />}
+        <ProcessView msg={msg} />
 
         {isContentError ? null : shown ? (
           <div className="bubble">

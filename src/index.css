@@ -198,9 +198,6 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .chat-item:hover .del { display: grid; }
 .chat-item:hover time { visibility: hidden; }
 .chat-item .del:hover { color: var(--danger); background: var(--danger-soft); }
-.chat-item.confirming { background: var(--danger-soft); color: var(--danger); }
-.chat-item.confirming .del-delete { display: grid; color: var(--danger); }
-.chat-item.confirming time { visibility: hidden; }
 .row-menu-pop {
   position: absolute; right: 4px; top: calc(100% + 2px); z-index: 30;
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
@@ -435,6 +432,26 @@ body.no-times .msg-time { display: none; }
   max-width: none; opacity: 1;
 }
 .field .seg button.on { background: var(--txt); color: var(--ink); border-color: var(--txt); }
+/* Personality picker (settings): stacked name + desc cards. */
+.personality .title { font-size: 14px; font-weight: 600; margin: 0 0 2px; color: var(--txt); }
+.personality .subtitle { font-size: 12.5px; color: var(--fnt); margin: 0 0 12px; }
+.personality .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.personality .card {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  background: none; cursor: pointer;
+}
+.personality .card:hover { border-color: var(--line2); }
+.personality .card.selected { border-color: var(--txt); background: var(--s1); }
+.personality .card .name { display: block; font-size: 13px; font-weight: 600; color: var(--txt); }
+.personality .card .desc { display: block; font-size: 11.5px; line-height: 1.4; color: var(--fnt); }
+.personality .customize-link {
+  margin-top: 10px; padding: 0; font-size: 12.5px; color: var(--mut);
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.personality .customize-link:hover { color: var(--txt); }
+.personality .trait-name { text-transform: capitalize; font-size: 13px; color: var(--txt); }
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
 .switch-row:last-child { border-bottom: none; }
 .switch-row .t { font-size: 13.5px; color: var(--txt); }
@@ -468,8 +485,8 @@ body.no-times .msg-time { display: none; }
 .user-row .ops { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .admin-tag { font-size: 10px; font-weight: 500; background: var(--s2); border-radius: 7px; padding: 2px 8px; color: var(--mut); }
 .badge { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; font-size: 10px; }
-.badge.gold { background: var(--txt); color: var(--ink); }
-.badge.og { background: var(--s2); color: var(--mut); border: 1px solid var(--line2); }
+.badge.gold { background: linear-gradient(135deg, #ffd76a, #f59e0b); color: #241a02; }
+.badge.og { background: linear-gradient(135deg, #60a5fa, #2563eb); color: #fff; }
 .modal-section { margin-bottom: 16px; }
 .avatar-row { display: flex; align-items: center; gap: 12px; }
 .avatar-lg { width: 56px; height: 56px; font-size: 20px; cursor: pointer; }
@@ -522,20 +539,22 @@ body.no-times .msg-time { display: none; }
 .thinking__chevron--open { transform: rotate(180deg); }
 .thinking__trace { margin: 8px 0 0; padding-left: 12px; border-left: 2px solid var(--line); }
 .thinking__trace-line { font-size: 12.5px; color: var(--fnt); margin: 0 0 6px; }
-/* Live tool-process view: running tools stream in, finished ones collapse. */
-.tool-activity {
+/* Blended live-process view: thinking, stages and tool calls in one card. */
+.process {
   border: 1px solid var(--line); border-radius: 10px; background: var(--s1);
   margin: 8px 0; overflow: hidden; max-width: 100%;
 }
-.tool-activity-head {
+.process-head {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 7px 10px; font-size: 12px; color: var(--mut); cursor: pointer;
 }
-.tool-activity-head:hover { color: var(--txt); }
-.tool-activity-body {
+.process-head:hover { color: var(--txt); }
+.process-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.process-body {
   border-top: 1px solid var(--line); padding: 6px 10px 9px;
   display: flex; flex-direction: column; gap: 9px;
 }
+.process-trace { display: flex; flex-direction: column; gap: 6px; border-left: 2px solid var(--line2); padding-left: 10px; }
 .tool-row { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
 .tool-row-main { flex: 1; min-width: 0; }
 .tool-row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--txt); }

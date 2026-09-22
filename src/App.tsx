@@ -713,7 +713,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
           if (streaming?.sessionId === id) abortRef.current?.abort();
           setSessions((p) => p.filter((s) => s.id !== id));
           if (activeId === id) setActiveId(null);
-          toast("Chat deleted");
+          toast("Chat successfully deleted");
         }}
         onOpenSettings={() => setPanel("settings")} onOpenProfile={() => setPanel("profile")}
         onClearAll={clearAllChats}
