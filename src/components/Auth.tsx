@@ -149,7 +149,9 @@ export default function Auth({ onAuth, onGuest }: Props) {
   };
   const oauthGo = (p: "google" | "github") => {
     if ((p === "google" && !oauth.google) || (p === "github" && !oauth.github)) return fail(`${p === "google" ? "Google" : "GitHub"} sign-in is not configured on the server yet`);
-    window.location.href = base() + `/api/auth/${p}`;
+    // Tell the backend where to land after OAuth so sign-in doesn't yank
+    // you onto a different frontend (e.g. Vercel -> github.io).
+    window.location.href = base() + `/api/auth/${p}?redirect=${encodeURIComponent(window.location.origin)}`;
   };
   const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); };
 
