@@ -207,7 +207,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
         };
       });
       console.table(rows);
-      console.log("VIEWPORT", window.innerWidth, "USER", authUser?.id || "signed-out");
+      console.log("VIEWPORT", window.innerWidth, "USER", authUser?.id || (guest ? "guest" : "signed-out"));
       // On-page report: no console needed, just screenshot the page.
       const box = document.createElement("div");
       box.style.cssText = "position:fixed;bottom:8px;right:8px;z-index:9999;background:#000;color:#0f0;font:11px/1.5 monospace;padding:10px 12px;border:1px solid #0f0;white-space:pre;max-width:60vw;max-height:50dvh;overflow:auto;";
@@ -219,8 +219,8 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
       document.body.appendChild(box);
     }, 800);
     return () => window.clearTimeout(t);
-    // Re-runs on sign-in: opening the link while logged out shows auth first.
-  }, [authUser]);
+    // Re-runs on sign-in AND guest entry: opening the link logged-out shows auth first.
+  }, [authUser, guest]);
   const clearAllChats = useCallback(() => {
     // Real clear: wipe local state AND the server record (source of truth).
     abortRef.current?.abort();
