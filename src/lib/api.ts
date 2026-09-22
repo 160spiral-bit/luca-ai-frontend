@@ -74,7 +74,7 @@ export type EngineEvent =
   | { kind: "sources"; sources: Source[] }
   | { kind: "search-info"; query: string; reason: string; count: number }
   | { kind: "tool-start"; roundId: string; name: string; query: string }
-  | { kind: "tool-end"; roundId: string; sources: { title: string; url: string; host: string }[]; ms: number }
+  | { kind: "tool-end"; roundId: string; sources: { title: string; url: string; host: string }[]; ms: number; result?: string }
   | { kind: "meta"; model: string; provider: string; pinned?: boolean }
   | { kind: "error"; message: string; code?: string; retryable?: boolean }
   | { kind: "artifact_start"; id: string; artifactType: string; title: string }
@@ -172,6 +172,23 @@ export async function* streamChat(opts: {
               q.push({ kind: "tool-start", roundId: tc.id || "call_" + uid(), name: tc.function.name || "", query });
             }
           }
+        }
+        if (j["tool-start"] && typeof j["tool-start"] === "object") {
+          const t = j["tool-start"] as { roundId?: unknown; name?: unknown; query?: unknown };
+          q.push({ kind: "tool-start", roundId: String(t.roundId || "call_" + uid()), name: String(t.name || ""), query: String(t.query || "") });
+        }
+        if (j["tool-end"] && typeof j["tool-end"] === "object") {
+          const t = j["tool-end"] as { roundId?: unknown; sources?: unknown; ms?: unknown; result?: unknown };
+          const srcs = Array.isArray(t.sources)
+            ? (t.sources as Source[]).filter((s) => s && typeof s.url === "string").map((s) => ({
+                title: String(s.title || s.domain || "Source"), url: String(s.url), host: String(s.domain || ""),
+              }))
+            : [];
+          q.push({
+            kind: "tool-end", roundId: String(t.roundId || ""),
+            sources: srcs, ms: Number(t.ms) || 0,
+            ...(typeof t.result === "string" && t.result ? { result: t.result.slice(0, 2000) } : {}),
+          });
         }
       } catch { /* malformed payload — skip, never crash the stream */ }
     };

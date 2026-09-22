@@ -85,7 +85,7 @@ export default function Sidebar(p: Props) {
 
   return (
     <>
-      <div className={`scrim ${p.mobileOpen ? "show" : ""}`} onClick={p.onCloseMobile} aria-hidden="true" />
+      <div className={`scrim sidebar-scrim ${p.mobileOpen ? "show" : ""}`} onClick={p.onCloseMobile} aria-hidden="true" />
       <aside className={`sidebar ${p.collapsed ? "hidden-side" : ""} ${p.mobileOpen ? "mobile-open" : ""}`} aria-label="Sidebar">
         <div className="sb-head">
           <button className="wordmark" onClick={() => { p.onNew(); p.onCloseMobile(); }} aria-label="Luca home">Luca</button>

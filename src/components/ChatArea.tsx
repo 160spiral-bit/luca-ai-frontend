@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
 import { copyText } from "../lib/store";
-import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
+import type { LucaMessage, Session, Settings, Profile, ToolRound } from "../lib/store";
 
 interface Props {
   session: Session | null; profile: Profile | null; settings: Settings;
@@ -86,6 +86,56 @@ function fmtDur(ms?: number): string | null {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
+function prettyToolName(name: string): string {
+  if (name === "web_search" || name === "search") return "Web search";
+  const p = name.split("__");
+  if (p[0] === "mcp" && p.length >= 3) return `${p[1]}/${p.slice(2).join("__")}`;
+  return name || "tool";
+}
+
+// Live tool-process view: running tools stream in with a spinner, finished
+// ones collapse into a "Used N tools · Xs" summary. Rounds stuck "running"
+// after the stream ended (tool declared but never executed) render as done.
+function ToolActivity({ rounds, streaming }: { rounds: ToolRound[]; streaming?: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (!rounds.length) return null;
+  const live = !!streaming && rounds.some((r) => r.status === "running");
+  const shown = open || live;
+  const doneCount = rounds.filter((r) => r.status !== "running" || !streaming).length;
+  const totalMs = rounds.reduce((a, r) => a + (r.ms || 0), 0);
+  const dur = fmtDur(totalMs);
+  const runningNames = rounds.filter((r) => r.status === "running" && streaming).map((r) => prettyToolName(r.name));
+  return (
+    <div className="tool-activity">
+      <button className="tool-activity-head" onClick={() => setOpen((v) => !v)} aria-expanded={shown}>
+        {live ? <span className="tool-spin" aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+        <span>{live ? `Using ${runningNames.join(", ") || "tools"}…` : `Used ${doneCount} tool${doneCount === 1 ? "" : "s"}${dur ? ` · ${dur}` : ""}`}</span>
+        <ChevronDown size={13} className={`thinking__chevron ${shown ? "thinking__chevron--open" : ""}`} aria-hidden="true" />
+      </button>
+      {shown && (
+        <div className="tool-activity-body">
+          {rounds.map((r) => (
+            <div key={r.id} className="tool-row">
+              {r.status === "running" && streaming
+                ? <span className="tool-spin" aria-hidden="true" />
+                : <Check size={12} aria-hidden="true" />}
+              <div className="tool-row-main">
+                <div className="tool-row-top">
+                  <strong>{prettyToolName(r.name)}</strong>
+                  {r.ms ? <span>{(r.ms / 1000).toFixed(1)}s</span> : null}
+                </div>
+                {r.query ? <div className="tool-query">{r.query}</div> : null}
+                {r.result ? <div className="tool-result">{r.result}</div> : null}
+                {!!r.sources?.length && <div className="tool-sources">{r.sources.length} source{r.sources.length === 1 ? "" : "s"}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Re-parse streaming text at ~30fps instead of per token.
 function useThrottled<T>(value: T, ms = 33): T {
   const [v, setV] = useState(value);
@@ -134,6 +184,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
       <div className="msg msg-luca">
         <div className="who">Luca</div>
         <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
+        {!!msg.toolRounds?.length && <ToolActivity rounds={msg.toolRounds} streaming={msg.streaming} />}
       </div>
     );
   }
@@ -143,6 +194,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         {!msg.streaming && (
           <Thinking reasoning={msg.reasoning} streaming={msg.streaming} thinkingMs={msg.thinkingMs} stageLabel={msg.stageLabel} />
         )}
+        {!!msg.toolRounds?.length && <ToolActivity rounds={msg.toolRounds} streaming={msg.streaming} />}
 
         {isContentError ? null : shown ? (
           <div className="bubble">

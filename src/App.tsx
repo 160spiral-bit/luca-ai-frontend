@@ -20,15 +20,8 @@ import {
   saveActiveId, saveArtifacts, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, titleFromMessage, uid,
 } from "./lib/store";
+import { buildGreeting, greetingStats } from "./lib/greeting";
 import type { Artifact, Attachment, AuthUser, LucaMessage, Profile, Session, Settings, Tier, ToolRound } from "./lib/store";
-
-function greetWord(): string {
-  const h = new Date().getHours();
-  if (h < 5) return "Still up";
-  if (h < 12) return "Morning";
-  if (h < 18) return "Afternoon";
-  return "Evening";
-}
 
 // Inline document/code attachments as text blocks so the model actually
 // receives them. Images travel as image_url parts; everything else must be
@@ -186,7 +179,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
     const t = window.setTimeout(() => { void saveArtifacts(artifacts, storageFullToast); }, 500);
     return () => window.clearTimeout(t);
   }, [artifacts, storageFullToast]);
-  const openArtifact = useCallback((id: string) => { setActiveArtifactId(id); }, []);
+  const openArtifact = useCallback((id: string) => { setActiveArtifactId(id); setMobileNav(false); }, []);
   // TEMPORARY layout debugger (?debug=layout): outlines each container and
   // prints real rects so centering can be verified without guesswork.
   useEffect(() => {
@@ -364,7 +357,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
             patchMsg(sid, auid, { content: acc });
             break;
           case "tool-start": patchRound(sid, auid, ev.roundId, { name: ev.name, query: ev.query, status: "running" }); break;
-          case "tool-end": patchRound(sid, auid, ev.roundId, { sources: ev.sources, status: "done", ms: ev.ms }); break;
+          case "tool-end": patchRound(sid, auid, ev.roundId, { sources: ev.sources, status: "done", ms: ev.ms, ...(ev.result ? { result: ev.result } : {}) }); break;
           case "error": patchMsg(sid, auid, { error: ev.message }); break;
           case "artifact_start": {
             setArtifacts((prev) => {
@@ -624,6 +617,17 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   const handleEditDraft = useCallback((text: string) => {
     setComposerDraft(text);
   }, []);
+  // Dynamic hero greeting: time of day + recency/frequency of use +
+  // whether any chat was left unfinished. Deterministic, never random.
+  const heroGreeting = buildGreeting({
+    hour: new Date().getHours(),
+    name: (profile?.name || authUser?.name || "there").trim() || "there",
+    ...greetingStats(sessions),
+    hasUnfinished: sessions.some((s) => {
+      const l = s.messages[s.messages.length - 1];
+      return !!l && (!!l.interrupted || !!l.error);
+    }),
+  });
   // Stable suggestion sender — keeps memoised messages from re-rendering.
   const sendSuggestion = useCallback((t: string) => {
     sendMessage(t, []);
@@ -697,7 +701,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
 
   return (
     <div className={`app${collapsed ? " collapsed" : ""}`}>
-      <button className="open-sidebar" onClick={() => { setCollapsed(false); setMobileNav(true); }} aria-label="Open sidebar" title="Open sidebar">
+      <button className="open-sidebar" onClick={() => setCollapsed(false)} aria-label="Open sidebar" title="Open sidebar">
         <PanelLeft size={16} />
       </button>
       <Sidebar
@@ -732,7 +736,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
           <div className="home">
             <div className="hero">
               <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
-              <h1 className="hero-greeting">{greetWord()}, {(profile?.name || authUser?.name || "there").trim() || "there"} — <em>what are we working on?</em></h1>
+              <h1 className="hero-greeting">{heroGreeting.head} — <em>{heroGreeting.sub}</em></h1>
               <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
                 tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
             </div>
