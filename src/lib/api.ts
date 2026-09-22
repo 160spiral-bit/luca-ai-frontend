@@ -168,7 +168,10 @@ export async function* streamChat(opts: {
           for (const tc of j.tool_calls) {
             if (tc?.function) {
               let query = "";
-              try { query = JSON.parse(tc.function.arguments || "{}").query || ""; } catch { /* non-JSON tool args — query stays empty */ }
+              try {
+                const a = JSON.parse(tc.function.arguments || "{}");
+                query = a.query || a.q || a.url || (typeof a.code === "string" ? a.code.slice(0, 120) : "") || "";
+              } catch { /* non-JSON tool args — query stays empty */ }
               q.push({ kind: "tool-start", roundId: tc.id || "call_" + uid(), name: tc.function.name || "", query });
             }
           }

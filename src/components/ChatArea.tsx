@@ -88,6 +88,8 @@ function fmtDur(ms?: number): string | null {
 
 function prettyToolName(name: string): string {
   if (name === "web_search" || name === "search") return "Web search";
+  if (name === "run_code") return "Run code";
+  if (name === "fetch_page") return "Read page";
   const p = name.split("__");
   if (p[0] === "mcp" && p.length >= 3) return `${p[1]}/${p.slice(2).join("__")}`;
   return name || "tool";
@@ -176,6 +178,9 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
     return msg.sources.filter((s) => seen.has(s.id));
   })();
   const isContentError = !!shown && /The model didn't return a response|All models are rate-limited/i.test(shown.trim());
+  // Display trim: streaming often leaves trailing newlines that render as a
+  // blank gap at the bottom of the bubble. Copy keeps full fidelity.
+  const shownTrimmed = typeof shown === "string" ? shown.replace(/\s+$/, "") : shown;
   const copyThis = async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
   const dur = fmtDur(msg.elapsedMs ?? msg.thinkingMs);
   // While streaming with no content yet: thinking indicator only.
@@ -198,7 +203,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
 
         {isContentError ? null : shown ? (
           <div className="bubble">
-            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shown}</div>}><Markdown text={shown} sources={msg.sources} /></Suspense>
+            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} /></Suspense>
           </div>
         ) : (!msg.reasoning && msg.streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null)}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
@@ -311,6 +316,8 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   const [draft, setDraft] = useState(msg.content);
   const [copied, setCopied] = useState(false);
   const copyThis = async () => { if (await copyText(msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
+  // Display trim: composer newlines leave a trailing gap in the bubble.
+  const displayContent = msg.content.replace(/\s+$/, "");
   if (editing) {
     return (
       <div className="msg msg-user">
@@ -328,7 +335,7 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   return (
     <div className="msg msg-user">
       <div className="bubble">
-        <Suspense fallback={msg.content}><Markdown text={msg.content} /></Suspense>
+        <Suspense fallback={displayContent}><Markdown text={displayContent} /></Suspense>
       </div>
       {(msg.attachments?.length || 0) > 0 && (
         <div className="att-chips">
