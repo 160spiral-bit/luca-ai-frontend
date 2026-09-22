@@ -345,7 +345,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
       const gen = streamChat({ tier: t, history, settings, profile, auth: authUser, signal: controller.signal });
       for await (const ev of gen as AsyncGenerator<EngineEvent>) {
         switch (ev.kind) {
-          case "reset": reasoning = ""; patchMsg(sid, auid, { reasoning: "" }); break;
+          case "reset": reasoning = ""; patchMsg(sid, auid, { reasoning: "", toolRounds: [] }); break;
           case "meta": patchMsg(sid, auid, { modelMeta: { model: ev.model, provider: ev.provider, pinned: ev.pinned } }); break;
           case "reasoning": reasoning += ev.text; patchMsg(sid, auid, { reasoning }); break;
           case "stage": patchMsg(sid, auid, { stage: ev.stage, stageLabel: ev.label }); break;
