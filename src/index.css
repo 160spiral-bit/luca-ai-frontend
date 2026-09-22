@@ -132,7 +132,9 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 }
 .topbar h1 { font-size: 13px; font-weight: 500; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .route-enter { animation: route-in var(--dur-slow) var(--ease-out); display: flex; flex: 1; min-height: 0; }
-.route-enter > main { flex: 1; display: flex; min-height: 0; }
+/* The router wrapper is flex: without this, .app shrink-wraps to content
+   and .main ends up ~400px wide with a black void beside it. */
+.route-enter > .app { flex: 1; min-width: 0; }
 @keyframes route-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- sidebar ---------- */
