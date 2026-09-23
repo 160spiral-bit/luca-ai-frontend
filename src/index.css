@@ -732,6 +732,9 @@ body.no-times .msg-time { display: none; }
   .sidebar.mobile-open { display: flex; }
   /* The top-bar/hero hamburger opens the drawer — never the desktop pill. */
   .open-sidebar { display: none !important; }
+  /* Home-screen menu: no topbar on empty chats, so pin it where the conv
+     hamburger lives — top-left, clear of the composer. */
+  .hero-menu-btn { position: fixed; top: 14px; left: 14px; z-index: 10; }
   .only-desktop { display: none !important; }
   .artifact-panel { width: 100vw; max-width: 100vw; }
   .conv .composer-zone { width: 94vw; }
