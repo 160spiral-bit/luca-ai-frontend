@@ -771,7 +771,7 @@ export default function App() {
           toast("Chat successfully deleted");
         }}
         onOpenSettings={() => setPanel("settings")} onOpenProfile={() => setPanel("profile")}
-        onClearAll={clearAllChats}
+        onClearAll={clearAllChats} onLogout={logout}
         isAdmin={authUser?.isAdmin} onOpenAdmin={() => setPanel("admin")}
         authUser={authUser} profile={profile} mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)}
         collapsed={collapsed} onToggleSidebar={() => setCollapsed((v) => !v)}

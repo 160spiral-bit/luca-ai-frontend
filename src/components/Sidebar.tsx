@@ -19,6 +19,7 @@ interface Props {
   onSearch: (q: string) => void; onSelect: (id: string) => void; onNew: () => void;
   onRename: (id: string, t: string) => void; onTogglePin: (id: string) => void; onDelete: (id: string) => void;
   onOpenSettings: () => void; onOpenProfile: () => void; onClearAll: () => void;
+  onLogout: () => void;
   isAdmin?: boolean; onOpenAdmin?: () => void;
   authUser: AuthUser | null; profile: Profile | null;
   mobileOpen: boolean; onCloseMobile: () => void;
@@ -181,7 +182,7 @@ export default function Sidebar(p: Props) {
                 window.clearTimeout(confirmTimer.current);
                 setArmClear(false); setUserMenu(false); p.onClearAll();
               }}>{armClear ? "Click again to confirm" : "Clear all chats"}</button>
-              <button role="menuitem" onClick={() => { setUserMenu(false); window.location.hash = "#/about"; }}>About Luca</button>
+              <button role="menuitem" onClick={() => { setUserMenu(false); p.onLogout(); }}>Log out</button>
             </div>
           </div>
         </div>
