@@ -37,12 +37,16 @@ export default function ChartBlock({ code }: { code: string }) {
     console.error("[viz] ChartBlock invalid spec, falling back to code:", code.slice(0, 200));
     return <pre><code>{code}</code></pre>;
   }
-  const W = 560, H = 300, padL = 40, padB = 30, padT = 16;
+  const W = 560, H = 260, padL = 40, padB = 62, padT = 14;
   const plotW = W - padL - 12, plotH = H - padT - padB;
   const max = Math.max(...spec.values, 0) || 1;
   const X = (i: number) => padL + (plotW * (spec!.type === "line" ? i / Math.max(spec!.values.length - 1, 1) : (i + 0.5) / spec!.values.length));
   const Y = (v: number) => padT + plotH - (plotH * v) / max;
-  const short = (l: string) => (l.length > 10 ? l.slice(0, 9) + "…" : l);
+  // X-axis labels are angled so full names fit without truncation; 28 chars
+  // is a backstop for pathological labels only (full text stays in <title>).
+  // Pie legends are horizontal text, so they keep a 22-char budget instead.
+  const axisLabel = (l: string) => (l.length > 28 ? l.slice(0, 27) + "…" : l);
+  const short = (l: string) => (l.length > 22 ? l.slice(0, 21) + "…" : l);
   // Event annotations: dashed vertical line at the matching x label with a
   // rotated text label. Bar/line only — meaningless on pie.
   const annotationLayer = spec.annotations && spec.type !== "pie" ? (
@@ -73,7 +77,7 @@ export default function ChartBlock({ code }: { code: string }) {
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
             <rect x={X(i) - bw / 2} y={Y(v)} width={bw} height={Math.max(padT + plotH - Y(v), 2)} rx={3} style={{ fill: "var(--ink-2)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i] ?? "")}</text>
+            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} style={{ fill: "var(--ink-3)" }}>{axisLabel(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
@@ -91,7 +95,7 @@ export default function ChartBlock({ code }: { code: string }) {
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
             <circle cx={X(i)} cy={Y(v)} r={3.5} style={{ fill: "var(--ink)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize={10} style={{ fill: "var(--ink-3)" }}>{short(spec!.labels[i] ?? "")}</text>
+            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} style={{ fill: "var(--ink-3)" }}>{axisLabel(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
