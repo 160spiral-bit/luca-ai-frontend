@@ -9,7 +9,7 @@ const ArtifactPanel = lazy(() => import("./components/ArtifactPanel"));
 import { AdminPanel, ProfilePanel, SettingsPanel } from "./components/Panels";
 import { useNavigate } from "react-router-dom";
 import {
-  followups, getUserData, nameChatFromMessages, pingHealth, putUserData,
+  followups, getUserData, mintGuestSession, nameChatFromMessages, pingHealth, putUserData,
   refreshMe, setUsername, streamChat, verifySession, verifyToken,
 } from "./lib/api";
 import type { ChatMsg, EngineEvent } from "./lib/api";
@@ -125,7 +125,7 @@ export default function App() {
 
   // auth bootstrap: oauth callback, then cached session
   useEffect(() => {
-    if (isGuest()) { setGuestState(true); setAuthLoading(false); return; }
+    if (isGuest()) { setGuestState(true); setAuthLoading(false); void mintGuestSession(); return; }
     const params = new URLSearchParams(window.location.search);
     const token = params.get("auth_token");
     const err = params.get("auth_error");
@@ -258,6 +258,14 @@ export default function App() {
   // per-account cloud sync — REPLACE semantics. Server data for the current
   // user overwrites every slice; nothing is merged, so a previous account's
   // chats/settings/tier/profile can never leak into this one.
+  //
+  // REPLACE only ever runs on a genuine, successful read. A failed request is
+  // NOT the same thing as an empty account: collapsing the two made a 5xx (or
+  // an unparseable body) look like "this account has no chats", which wiped
+  // local chats and settings and then pushed that empty state back to the
+  // server. A load that did not succeed must never mutate local state, and
+  // must leave `hydrated` false so the POST below stays blocked — that is the
+  // whole guarantee: we never overwrite cloud data we failed to read.
   const hydrated = useRef(false);
   const adoptRef = useRef<Session[] | null>(null);
   useEffect(() => {
@@ -265,15 +273,33 @@ export default function App() {
     const myId = authUser.id;
     const token = loadToken();
     if (!token) return;
+    type Load =
+      | { kind: "signed-out" }
+      | { kind: "unavailable" }
+      | { kind: "ok"; data: Record<string, unknown> | null };
     getUserData(token)
-      .then((r) => {
-        if (r.status === 401) { clearAuth(); setAuthUser(null); setGuestState(false); return null; }
-        return r.ok ? r.json() : null;
+      .then((r): Load | Promise<Load> => {
+        if (r.status === 401) { clearAuth(); setAuthUser(null); setGuestState(false); return { kind: "signed-out" }; }
+        if (!r.ok) {
+          console.warn("[Sync] Cloud load failed (" + r.status + ") — keeping local data");
+          return { kind: "unavailable" };
+        }
+        return r.json()
+          .then((body): Load => ({ kind: "ok", data: (body && typeof body.data === "object" ? body.data : null) }))
+          .catch(() => { console.warn("[Sync] Cloud load returned unreadable body — keeping local data"); return { kind: "unavailable" }; });
       })
-      .then((j) => {
+      .then((load) => {
+        if (!load || load.kind !== "ok") return;
         if (myId !== authUser.id) return; // account changed mid-flight — discard
-        const d = j?.data || {};
-        const srvSessions = Array.isArray(d.sessions) ? d.sessions : [];
+        const d = load.data;
+        // `data: null` is the server's honest "no record for this account yet"
+        // and stays authoritative. A present-but-malformed record is not, so it
+        // is treated as a failed read rather than an empty account.
+        if (d !== null && !Array.isArray((d as { sessions?: unknown }).sessions)) {
+          console.warn("[Sync] Cloud record malformed — keeping local data");
+          return;
+        }
+        const srvSessions = d && Array.isArray(d.sessions) ? (d.sessions as Session[]) : [];
         // Adopt pre-login guest work only into an EMPTY server record, and
         // merge messages sent during the hydration window. Never another
         // account's data: post-wipe local state can only be this user's own.
@@ -284,29 +310,29 @@ export default function App() {
           void saveSessions(merged, storageFullToast);
           return merged;
         });
-        const srvActive = typeof d.activeId === "string" && srvSessions.some((s: Session) => s.id === d.activeId) ? d.activeId : null;
+        const srvActive = typeof d?.activeId === "string" && srvSessions.some((s: Session) => s.id === d.activeId) ? d.activeId : null;
         setActiveId((prev) => {
           const next = prev || srvActive;
           saveActiveId(next);
           return next;
         });
-        const srvSettings = { ...defaultSettings(), ...(d.settings || {}) };
+        const srvSettings = { ...defaultSettings(), ...((d?.settings as object) || {}) };
         setSettings(srvSettings);
         saveSettings(srvSettings);
-        const srvTier = d.tier === "pro" ? "pro" : "flash";
+        const srvTier = d?.tier === "pro" ? "pro" : "flash";
         setTier(srvTier);
         saveTier(srvTier);
         // Server profile presence = onboarding completed for THIS user.
         // Absent → fall back to the account's own name/avatar (OAuth already
         // has both) so the gate never re-asks for what exists; only a truly
         // blank account sees the name prompt.
-        if (d.profile && typeof d.profile === "object") { setProfile(d.profile); saveProfile(d.profile); }
+        if (d?.profile && typeof d.profile === "object") { setProfile(d.profile as Profile); saveProfile(d.profile as Profile); }
         else {
           const aName = (authUser.name || "").trim();
           const hasRealName = !!aName && aName !== "User" && !/^(googleuser|githubuser|user\d*)$/i.test(aName);
           if (hasRealName || authUser.avatar) {
-            const adopted = { name: hasRealName ? aName : "User", persona: null, theme: themeRef.current, avatar: authUser.avatar || null };
-            setProfile(adopted); saveProfile(adopted);
+            const fallback = { name: hasRealName ? aName : "User", persona: null, theme: themeRef.current, avatar: authUser.avatar || null };
+            setProfile(fallback); saveProfile(fallback);
           } else { setProfile(null); }
         }
         hydrated.current = true;
@@ -618,6 +644,9 @@ export default function App() {
   }, [toast, wipeClientState]);
   const handleGuest = useCallback(() => {
     setGuest(true); setGuestState(true); setAuthLoading(false);
+    // /api/chat needs a bearer token even for guests — mint the anonymous
+    // session up front so the very first message is not a 401.
+    void mintGuestSession();
     toast("You're browsing as a guest — chats stay on this device");
   }, [toast]);
   const navigate = useNavigate();

@@ -38,6 +38,7 @@ const K = {
   settings: "luca-settings", sessions: "luca-sessions", active: "luca-active-session",
   tier: "luca_tier", onboard: "luca-onboarding", token: "luca-auth-token",
   user: "luca-auth-user", guest: "luca-guest", confirmed: "luca-username-confirmed",
+  guestToken: "luca-guest-token",
 };
 function get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }
 // TODO(storage): surface QuotaExceededError to the user (Phase 2 moves sessions to IndexedDB).
@@ -55,7 +56,7 @@ export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personali
 // session hydrates purely from the new account's server record. Never rely on
 // overwriting individual fields.
 export const clearDeviceState = () => {
-  [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed].forEach(del);
+  [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed, K.guestToken].forEach(del);
   void clearSessions();
   void clearArtifacts();
   try { sessionStorage.clear(); } catch { /* storage may be unavailable — device keys already removed */ }
@@ -175,6 +176,13 @@ export const saveAuthUser = (u: AuthUser) => set(K.user, JSON.stringify(u));
 export const clearAuth = () => { del(K.token); del(K.user); };
 export const isGuest = () => get(K.guest) === "true";
 export const setGuest = (v: boolean) => { if (v) set(K.guest, "true"); else del(K.guest); };
+// Anonymous chat session minted by POST /api/auth/guest. /api/chat requires a
+// bearer token, so guests carry this instead of an account token. It is kept in
+// its own key so signing in or out never disturbs it, and it is deliberately
+// NOT cleared by clearAuth() (that would drop a guest mid-session on a failed
+// sign-in attempt).
+export const loadGuestToken = (): string | null => get(K.guestToken);
+export const saveGuestToken = (t: string) => set(K.guestToken, t);
 export const confirmedUsername = (id: string): boolean => {
   try { return !!JSON.parse(get(K.confirmed) || "{}")[id]; } catch { return false; }
 };

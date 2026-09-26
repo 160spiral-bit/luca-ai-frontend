@@ -1,6 +1,6 @@
 // Luca v2 — backend client. Speaks the exact server.js contract.
 import { createParser } from "eventsource-parser";
-import { loadSettings, loadToken, uid } from "./store";
+import { loadGuestToken, loadSettings, loadToken, saveGuestToken, uid } from "./store";
 import type { AuthUser, Settings, Source, Tier } from "./store";
 
 const FALLBACK = "https://luca-ai-iozy.onrender.com";
@@ -30,10 +30,45 @@ export const base = () => {
   const raw = (env || loadSettings().backendUrl || FALLBACK).replace(/\/+$/, "");
   return safeBase(raw) || FALLBACK;
 };
+// /api/chat requires a bearer token. Signed-in users send their account JWT;
+// guests send the anonymous session minted by /api/auth/guest. Without either,
+// the backend answers 401 rather than spending provider credit.
 const authHeaders = (): Record<string, string> => {
-  const t = loadToken();
+  const t = loadToken() || loadGuestToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
+
+// De-duplicates concurrent mints (guest entry and the first send can race).
+let minting: Promise<string | null> | null = null;
+export async function mintGuestSession(): Promise<string | null> {
+  const existing = loadGuestToken();
+  if (existing) return existing;
+  if (minting) return minting;
+  minting = (async () => {
+    try {
+      const r = await fetch(base() + "/api/auth/guest", { method: "POST" });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (typeof j?.token !== "string" || !j.token) return null;
+      saveGuestToken(j.token);
+      return j.token;
+    } catch {
+      return null;
+    } finally {
+      minting = null;
+    }
+  })();
+  return minting;
+}
+
+// Guarantees the caller has *some* session before spending a request. Guests
+// reaching the composer without a token (fresh guest flag, cleared storage,
+// token older than its TTL) get one minted here rather than a 401.
+async function ensureSessionToken(): Promise<boolean> {
+  if (loadToken() || loadGuestToken()) return true;
+  if (!(await mintGuestSession())) return false;
+  return !!(loadToken() || loadGuestToken());
+}
 
 // Named API calls — no component should call fetch directly.
 const req = (path: string, token?: string, init?: RequestInit): Promise<Response> =>
@@ -109,13 +144,25 @@ export async function* streamChat(opts: {
   const onAbort = () => ctrl.abort();
   opts.signal.addEventListener("abort", onAbort, { once: true });
   try {
+    // Never spend a request without a session: guests get one minted on demand
+    // so a cleared/expired guest token doesn't surface as a bare 401.
+    if (!(await ensureSessionToken())) throw new Error("Could not start a session — check your connection and retry.");
     const res = await fetch(base() + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({ modelTier: opts.tier, messages: opts.history, stream: true, tools: true, userSettings }),
       signal: ctrl.signal,
     });
-    if (!res.ok || !res.body) throw new Error("Backend error " + res.status);
+    if (!res.ok || !res.body) {
+      // Surface the server's own message (session required / guest limit /
+      // suspended) instead of a bare status code.
+      let msg = "Backend error " + res.status;
+      try {
+        const j = await res.json();
+        if (j && typeof j.error === "string" && j.error) msg = j.error;
+      } catch { /* non-JSON error body — keep the status-code message */ }
+      throw new Error(msg);
+    }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let sawDone = false;
