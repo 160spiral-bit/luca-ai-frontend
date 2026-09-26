@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Toaster, toast as sonnerToast } from "sonner";
 import { Menu, PanelLeft } from "lucide-react";
 import Sidebar from "./components/Sidebar";
@@ -36,7 +36,7 @@ function docBlockFor(atts?: Attachment[]): string {
 
 
 
-export default function App({ namespace: _namespace }: { namespace: string }) {
+export default function App() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile());
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsReady, setSessionsReady] = useState(false);
@@ -70,6 +70,9 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   const [composerDraft, setComposerDraft] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
+  // Monotonic generation counter: regenerate() reuses the message uid, so a
+  // late followups() result from generation N must not land on generation N+1.
+  const genRef = useRef(0);
 
   const activeSession = sessions.find((s) => s.id === activeId) || null;
   // FIX 2a: generation state is scoped to its session. The composer only
@@ -112,7 +115,9 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   }, []);
 
   useEffect(() => {
-    const ping = () => { void pingHealth(); };
+    // Background tabs don't need to keep a free-tier host awake.
+    if (document.hidden) return;
+    const ping = () => { if (!document.hidden) void pingHealth(); };
     ping();
     const id = window.setInterval(ping, 60000);
     return () => window.clearInterval(id);
@@ -348,6 +353,10 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   const runStream = useCallback(async (sid: string, auid: string, history: ChatMsg[], userText: string, t: Tier) => {
     const controller = new AbortController();
     abortRef.current = controller;
+    const genId = ++genRef.current;
+    // Set synchronously: the post-render effect is too late to stop a fast
+    // double-send from starting two streams.
+    streamingRef.current = sid;
     setStreaming({ sessionId: sid, msgUid: auid });
     let acc = "", reasoning = "";
     const startedAt = Date.now();
@@ -410,6 +419,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
       // only if this message is still the latest (conversation didn't move on).
       if (acc.trim().length > 40 && !controller.signal.aborted) {
         void followups(acc).then((sugs) => {
+          if (genId !== genRef.current) return; // superseded by a newer generation
           if (!sugs.length || controller.signal.aborted) return;
           const cur = sessionsRef.current.find((s) => s.id === sid);
           const last = cur?.messages[cur.messages.length - 1];
@@ -493,7 +503,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
     } else baseMsgs = liveSession.messages;
     const sendTier = liveSession?.tier || tier;
     const userMsg: LucaMessage = { uid: uid(), role: "user", content: text, ts: Date.now(), attachments: attachments.length ? attachments : undefined };
-    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: sendTier, streaming: true, toolRounds: [] };
+    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: sendTier, streaming: true, startedAt: Date.now(), toolRounds: [] };
     const id = sid;
     setSessions((p) => p.map((s) => (s.id === id ? { ...s, updatedAt: Date.now(), messages: [...s.messages, userMsg, asstMsg] } : s)));
     // New turn must carry its images as image_url parts (not a plain string),
@@ -529,7 +539,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
     const prev = [...(target.versions || [])];
     if (target.content && !target.streaming && prev[prev.length - 1] !== target.content) prev.push(target.content);
     const rt = s.tier || tier;
-    const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier: rt, streaming: true, toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
+    const fresh: LucaMessage = { uid: mu, role: "assistant", content: "", ts: Date.now(), tier: rt, streaming: true, startedAt: Date.now(), toolRounds: [], versions: prev.length ? prev : undefined, versionIndex: undefined };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, fresh] } : x)));
     void runStream(sid, mu, toHistory(before), lastUser.content, rt);
   }, [tier, runStream]);
@@ -545,7 +555,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
     if (!orig || !orig.uid) return;
     const userMsg: LucaMessage = { ...orig, content: text, ts: Date.now() };
     const et = s.tier || tier;
-    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: et, streaming: true, toolRounds: [] };
+    const asstMsg: LucaMessage = { uid: uid(), role: "assistant", content: "", ts: Date.now(), tier: et, streaming: true, startedAt: Date.now(), toolRounds: [] };
     setSessions((p) => p.map((x) => (x.id === sid ? { ...x, updatedAt: Date.now(), messages: [...before, userMsg, asstMsg] } : x)));
     const editImgs = (userMsg.attachments || []).filter((a) => a.type.startsWith("image/"));
     const editDocBlock = docBlockFor(userMsg.attachments);
@@ -634,7 +644,8 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
   }, []);
   // Dynamic hero greeting: time of day + recency/frequency of use +
   // whether any chat was left unfinished. Deterministic, never random.
-  const heroGreeting = buildGreeting({
+  // Memoised: it walks every session, so don't recompute per keystroke.
+  const heroGreeting = useMemo(() => buildGreeting({
     hour: new Date().getHours(),
     name: (profile?.name || authUser?.name || "there").trim() || "there",
     ...greetingStats(sessions),
@@ -642,7 +653,7 @@ export default function App({ namespace: _namespace }: { namespace: string }) {
       const l = s.messages[s.messages.length - 1];
       return !!l && (!!l.interrupted || !!l.error);
     }),
-  });
+  }), [profile?.name, authUser?.name, sessions]);
   // Stable suggestion sender — keeps memoised messages from re-rendering.
   const sendSuggestion = useCallback((t: string) => {
     sendMessage(t, []);

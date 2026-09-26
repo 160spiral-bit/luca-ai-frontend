@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
 import type { AuthUser, Profile, Session } from "../lib/store";
@@ -64,9 +64,25 @@ export default function Sidebar(p: Props) {
   useEffect(() => { if (renamingId) { renameRef.current?.focus(); renameRef.current?.select(); } }, [renamingId]);
   useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
 
-  const q = p.search.trim().toLowerCase();
-  const visible = (q ? p.sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q))) : p.sessions)
-    .sort((a, b) => Number(b.pinned || false) - Number(a.pinned || false) || (b.updatedAt || 0) - (a.updatedAt || 0));
+  // Local draft + debounce: filtering walks every message of every chat, so
+  // don't re-filter (and re-render the app) on each keystroke.
+  const { search: searchProp, onSearch } = p;
+  const [draft, setDraft] = useState(searchProp);
+  useEffect(() => { setDraft(searchProp); }, [searchProp]);
+  useEffect(() => {
+    if (draft === searchProp) return;
+    const id = window.setTimeout(() => onSearch(draft), 180);
+    return () => window.clearTimeout(id);
+  }, [draft, searchProp, onSearch]);
+  const q = draft.trim().toLowerCase();
+  // Copy before sorting: Array.prototype.sort sorts IN PLACE, and when there
+  // is no query `visible` would otherwise BE the state array from props.
+  const visible = useMemo(() => {
+    const base = q
+      ? p.sessions.filter((s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)))
+      : [...p.sessions];
+    return base.sort((a, b) => Number(b.pinned || false) - Number(a.pinned || false) || (b.updatedAt || 0) - (a.updatedAt || 0));
+  }, [p.sessions, q]);
   const commitRename = () => { if (renamingId && renameValue.trim()) p.onRename(renamingId, renameValue.trim()); setRenamingId(null); };
   const lastActivity = (s: Session) => s.messages.length ? (s.messages[s.messages.length - 1]?.ts || s.updatedAt || 0) : (s.createdAt || 0);
 
@@ -86,7 +102,7 @@ export default function Sidebar(p: Props) {
         </button>
         <div className="search">
           <Search size={14} />
-          <input value={p.search} onChange={(e) => p.onSearch(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Search chats" aria-label="Search chats" />
         </div>
         <div className="label">Recents</div>
         <nav className="recents" aria-label="Recent chats">

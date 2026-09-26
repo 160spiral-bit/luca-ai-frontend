@@ -90,11 +90,17 @@ function splitFences(md: string): Fence[] {
   return out;
 }
 
-// viz:svg from model output — DOMPurify SVG profile, never regex-stripping.
+// viz:svg from model output — DOMPurify SVG profile with script-capable and
+// exfil-capable constructs forbidden (style/foreignObject/use/a + inline
+// style), never regex-stripping.
 function InlineSvg({ raw }: { raw: string }) {
   const clean = useMemo(() => {
     try {
-      const out = DOMPurify.sanitize(raw, { USE_PROFILES: { svg: true } });
+      const out = DOMPurify.sanitize(raw, {
+        USE_PROFILES: { svg: true },
+        FORBID_TAGS: ["style", "foreignObject", "use", "a", "script", "iframe", "embed", "object"],
+        FORBID_ATTR: ["style", "href", "xlink:href", "onclick", "onload", "onerror", "onmouseover", "onmouseout", "onfocus", "onblur", "onbegin", "onend", "onrepeat", "onactivate"],
+      });
       if (!out.trim().toLowerCase().startsWith("<svg")) return null;
       return out;
     } catch {
@@ -111,6 +117,10 @@ function MdChunk({ body, sources }: { body: string; sources?: Source[] }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex, [rehypeSanitize, schema]]}
+      // Take over URL filtering entirely: rehype-sanitize (schema above) +
+      // SafeImage already decide what loads. The default transform would
+      // silently blank data: URLs (model-generated images) before we see them.
+      urlTransform={(url) => url}
       components={{
         // eslint-disable-next-line jsx-a11y/anchor-has-content -- link text comes from markdown at runtime
         a: (p) => <a {...p} target="_blank" rel="noreferrer noopener" />,
@@ -130,12 +140,12 @@ function MdChunk({ body, sources }: { body: string; sources?: Source[] }) {
   );
 }
 
-export default memo(function Markdown({ text, sources }: { text: string; sources?: Source[] }) {
+export default memo(function Markdown({ text, sources, live }: { text: string; sources?: Source[]; live?: boolean }) {
   const fences = useMemo(() => splitFences(text), [text]);
   return (
     <div className="md">
       {fences.map((f, i) => {
-        if (f.kind === "mermaid") return <Suspense key={i} fallback={<pre>{f.code}</pre>}><Mermaid code={f.code} /></Suspense>;
+        if (f.kind === "mermaid") return <Suspense key={i} fallback={<pre>{f.code}</pre>}><Mermaid code={f.code} defer={live} /></Suspense>;
         if (f.kind === "chart") return <Suspense key={i} fallback={<pre>{f.code}</pre>}><ChartBlock code={f.code} /></Suspense>;
         if (f.kind === "viz") {
           if (f.vizType === "svg") return <InlineSvg key={i} raw={f.code} />;

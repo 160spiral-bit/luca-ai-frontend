@@ -10,7 +10,7 @@ export interface Source { id: number; url: string; domain: string; title: string
 export interface SearchInfo { query: string; reason: string; count: number; }
 export interface LucaMessage {
   uid: string; role: Role; content: string; ts: number;
-  tier?: Tier; reasoning?: string; thinkingMs?: number; elapsedMs?: number;
+  tier?: Tier; reasoning?: string; thinkingMs?: number; elapsedMs?: number; startedAt?: number;
   stage?: string; stageLabel?: string;
   sources?: Source[]; searchInfo?: SearchInfo; followups?: string[];
   toolRounds?: ToolRound[]; attachments?: Attachment[];
@@ -44,7 +44,7 @@ function get(k: string): string | null { try { return localStorage.getItem(k); }
 function set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* quota/full — surfaced in Phase 2 */ } }
 function del(k: string) { try { localStorage.removeItem(k); } catch { /* missing key — nothing to remove */ } }
 
-export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+export const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
 
 const DEFAULT_SETTINGS: Settings = {
   theme: "dark", enterToSend: true, showTimestamps: false, autoScroll: true, backendUrl: "",
@@ -185,8 +185,16 @@ export const markUsernameConfirmed = (id: string) => {
 // duplicating sessions that exist on both sides. Never another account's
 // data — callers only pass pre-login local state for a fresh account.
 export function mergeAdopted(srv: Session[], adopted: Session[], prev: Session[]): Session[] {
-  const localOnly = [...adopted, ...prev].filter((l) => !srv.some((s) => s.id === l.id));
-  return [...srv, ...localOnly];
+  const seen = new Set(srv.map((s) => s.id));
+  const out = [...srv];
+  // Dedupe within the local side too: adopted sessions are usually ALSO still
+  // in prev (sent during the hydration window), which duplicated them before.
+  for (const l of [...adopted, ...prev]) {
+    if (!l || seen.has(l.id)) continue;
+    seen.add(l.id);
+    out.push(l);
+  }
+  return out;
 }
 
 export const titleFromMessage = (t: string) => {

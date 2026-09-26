@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { HashRouter, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 import "./index.css";
 import App from "./App";
 import { About } from "./pages";
@@ -10,14 +10,13 @@ import { About } from "./pages";
 // 404 and relative asset paths would break under /chat. Hash routes keep
 // ./assets/... resolving everywhere with zero server config.
 function AnimatedRoutes() {
-  const location = useLocation();
   return (
-    <main key={location.pathname + location.hash} className="route-enter">
+    <main className="route-enter">
       <Routes>
-        <Route path="/" element={<App namespace="home" />} />
-        <Route path="/chat" element={<App namespace="chat" />} />
+        <Route path="/" element={<App />} />
+        <Route path="/chat" element={<App />} />
         <Route path="/about" element={<About />} />
-        <Route path="*" element={<App namespace="home" />} />
+        <Route path="*" element={<App />} />
       </Routes>
     </main>
   );

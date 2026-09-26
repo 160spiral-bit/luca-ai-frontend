@@ -25,6 +25,24 @@ describe("markdown sanitisation", () => {
     const { container } = render(<Markdown text="arr[10] and [1]" sources={SRC} />);
     expect(container.textContent).toContain("arr[10]");
   });
+
+  it("renders data: images directly but gates remote ones behind a click", () => {
+    const { container } = render(
+      <Markdown text={'![a](data:image/png;base64,AAA)\n\n![b](https://evil.example/x.png)'} />
+    );
+    const imgs = container.querySelectorAll("img");
+    expect(imgs.length).toBe(1);
+    expect(imgs[0]?.getAttribute("src") ?? "").toMatch(/^data:image\//);
+    const gate = container.querySelector(".img-gate");
+    expect(gate?.textContent ?? "").toContain("evil.example");
+  });
+
+  it("strips scriptable SVG constructs", () => {
+    const { container } = render(
+      <Markdown text={'```viz:svg\n<svg><foreignObject><div>hi</div></foreignObject><circle r="5"/></svg>\n```'} />
+    );
+    expect(container.querySelector("foreignObject")).toBeNull();
+  });
 });
 
 describe("bindCitations", () => {

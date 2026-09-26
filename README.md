@@ -21,6 +21,8 @@ no server rewrites needed. This repo is the source of truth.
 
 `npm run dev` · `npm run build` (typecheck + bundle) · `npm run typecheck` · `npm run lint` · `npm test` (vitest). CI runs all four on push/PR.
 
+> Test-env note: if `vitest run` hangs on worker spawn (forks-pool timeout — an environmental flake on some Windows setups, not a code failure), retry with `npx vitest run --maxWorkers=1 --pool=forks`.
+
 ## Build / deploy
 
 `npm run build` → `dist/` (copied to the `luca-ai-web` GitHub Pages repo + Vercel — those hold build output only).

@@ -767,3 +767,116 @@ body.no-times .msg-time { display: none; }
   .route-enter { animation: none; }
   .seg, .model-ctl.open .seg, .chev { transition: none !important; }
 }
+/* ---------- ProcessView (thinking indicator) ----------------------------
+   Uses your existing tokens, so dark + light themes work with no changes. */
+.pv {
+  margin: 8px 0;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--s1);
+  overflow: hidden;
+  transition: border-color 0.25s var(--ease-out);
+}
+.pv--live { border-color: var(--line2); }
+
+/* Finished state: minimal single-line pill, not a card. No border, no card
+   background on the wrapper — just a subtle tint on the summary row itself. */
+.pv--done { border: 0; background: transparent; }
+.pv--done .pv-head {
+  width: auto; display: inline-flex; gap: 6px;
+  padding: 3px 10px; font-size: 12px;
+  background: var(--s1); border-radius: 999px;
+}
+.pv--done .pv-head:focus-visible { border-radius: 999px; }
+
+.pv-head {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 12px; font-size: 12.5px; color: var(--mut);
+  background: none; border: 0; cursor: pointer; text-align: left;
+}
+.pv-head:hover { color: var(--txt); }
+.pv-head:focus-visible { outline: 2px solid var(--line2); outline-offset: -2px; border-radius: 12px; }
+
+.pv-icon { display: inline-grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; color: var(--fnt); }
+
+/* label: shimmer sweep while live, calm text when done */
+.pv-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv--live .pv-label {
+  background: linear-gradient(100deg, var(--mut) 30%, var(--txt) 50%, var(--mut) 70%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: pv-shimmer 2.2s linear infinite;
+}
+@keyframes pv-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+/* time gets its own non-shrinking slot so ellipsis never eats it */
+.pv-time { flex-shrink: 0; font-size: 11.5px; color: var(--fnt); font-variant-numeric: tabular-nums; }
+
+.pv-chev { flex-shrink: 0; color: var(--fnt); transition: transform 0.25s var(--ease-out); }
+/* Only the live header rotates its chevron; the finished pill swaps
+   right/down chevron components instead. */
+.pv--live.pv--open .pv-chev { transform: rotate(180deg); }
+
+/* live orb: soft breathing dot with an expanding ring */
+.pv-orb {
+  position: relative; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--txt); animation: pv-breathe 1.6s ease-in-out infinite;
+}
+.pv-orb::after {
+  content: ""; position: absolute; inset: -4px; border-radius: 50%;
+  border: 1.5px solid var(--txt); opacity: 0; animation: pv-ring 1.6s ease-out infinite;
+}
+.pv-orb--sm { width: 6px; height: 6px; }
+.pv-orb--sm::after { inset: -3px; }
+@keyframes pv-breathe { 0%,100% { transform: scale(0.85); opacity: 0.7; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes pv-ring { 0% { transform: scale(0.6); opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }
+
+/* one-line peek of the latest thought while collapsed */
+.pv-peek {
+  padding: 0 12px 9px 35px; margin-top: -2px;
+  font-size: 12px; color: var(--fnt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: pv-fade 0.3s var(--ease-out);
+}
+@keyframes pv-fade { from { opacity: 0; transform: translateY(2px); } }
+
+/* height animation without measuring */
+.pv-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.28s var(--ease-out); }
+.pv-collapse[data-open="true"] { grid-template-rows: 1fr; }
+.pv-collapse-inner { overflow: hidden; min-height: 0; }
+/* Expanded detail: one continuous block, not a second panel — spacing, not a
+   divider, separates it from the header. */
+.pv-body { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+
+.pv-trace {
+  white-space: pre-wrap; word-break: break-word;
+  font-size: 12.5px; line-height: 1.6; color: var(--fnt);
+  border-left: 2px solid var(--line2); padding-left: 10px;
+  max-height: 220px; overflow-y: auto;
+}
+
+.pv-tools { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pv-tool { display: flex; gap: 9px; align-items: flex-start; font-size: 12px; }
+.pv-tool-ico { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-top: 2px; flex-shrink: 0; color: var(--fnt); }
+.pv-tool--run .pv-tool-ico { color: var(--txt); }
+.pv-tool-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Tool name is metadata, not a heading: normal weight, muted. */
+.pv-tool-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; color: var(--mut); }
+.pv-tool-top strong { font-weight: 400; }
+/* Timing is secondary detail: small and dim. */
+.pv-tool-ms { color: var(--fnt); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Query is the primary readable line; source count is smaller and dimmer. */
+.pv-tool-q { color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-tool-r { color: var(--fnt); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pv-tool-src { color: var(--fnt); font-size: 11px; }
+
+/* reduced motion: keep a gentle, non-moving "alive" signal (NOT frozen) */
+@media (prefers-reduced-motion: reduce) {
+  .pv--live .pv-label { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--txt); }
+  .pv-orb { animation: pv-pulse-soft 2s ease-in-out infinite !important; }
+  .pv-orb::after { display: none; }
+  .pv-collapse, .pv-chev, .pv { transition: none !important; }
+  .pv-peek { animation: none; }
+}
+@keyframes pv-pulse-soft { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }

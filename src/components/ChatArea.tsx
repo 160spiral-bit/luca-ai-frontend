@@ -1,7 +1,8 @@
 import { Suspense, lazy, memo, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
+import { ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pencil, RefreshCw, RotateCcw } from "lucide-react";
 const Markdown = lazy(() => import("./Markdown"));
+import ProcessView from "./ProcessView";
 import { copyText } from "../lib/store";
 import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
 
@@ -14,6 +15,7 @@ interface Props {
   onToast: (m: string) => void;
   onEditDraft: (text: string) => void;
   onOpenArtifact: (id: string) => void;
+  onPreviewHtml: (title: string, html: string) => void;
 }
 
 function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: string; onRetry: () => void; onEditLastMessage: () => void }) {
@@ -34,80 +36,6 @@ function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: st
   );
 }
 
-// Unified live-process view: thinking, stages and tool calls blended into a
-// single timeline card instead of separate blocks. Rounds stuck "running"
-// after the stream ended (declared but never executed) render as done.
-function ProcessView({ msg }: { msg: LucaMessage }) {
-  const [expanded, setExpanded] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef(Date.now());
-  const streaming = !!msg.streaming;
-  useEffect(() => {
-    if (!streaming) return;
-    startRef.current = Date.now();
-    setElapsed(0);
-    const id = window.setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
-    return () => window.clearInterval(id);
-  }, [streaming, msg.uid]);
-  const trace = (msg.reasoning || "").split(/\n+/).filter(Boolean);
-  const rounds = msg.toolRounds || [];
-  const running = rounds.filter((r) => r.status === "running" && streaming);
-  const live = streaming && (!msg.content || running.length > 0);
-  const shown = expanded || live;
-  const doneCount = rounds.filter((r) => r.status !== "running" || !streaming).length;
-  const toolMs = rounds.reduce((a, r) => a + (r.ms || 0), 0);
-  if (!streaming && !trace.length && !rounds.length) return null;
-  let label: string;
-  if (streaming) {
-    if (msg.stageLabel) label = msg.stageLabel;
-    else if (running.length) label = `Using ${running.map((r) => prettyToolName(r.name)).join(", ")}`;
-    else if (!msg.content) label = "Thinking";
-    else label = "Working";
-  } else {
-    const bits: string[] = [];
-    if (trace.length) bits.push(`Thought for ${Math.max(1, Math.round((msg.thinkingMs || 1000) / 1000))}s`);
-    if (rounds.length) {
-      const dur = fmtDur(toolMs);
-      bits.push(`Used ${doneCount} tool${doneCount === 1 ? "" : "s"}${dur ? ` · ${dur}` : ""}`);
-    }
-    label = bits.join(" · ") || "Process";
-  }
-  return (
-    <div className="process">
-      <button className="process-head" onClick={() => setExpanded((v) => !v)} aria-expanded={shown}>
-        {streaming ? <span className="tool-spin" aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-        <span className="process-label">{label}{streaming ? ` · ${elapsed}s` : ""}</span>
-        <ChevronDown size={13} className={`thinking__chevron ${shown ? "thinking__chevron--open" : ""}`} aria-hidden="true" />
-      </button>
-      {shown && (
-        <div className="process-body">
-          {trace.length > 0 && (
-            <div className="process-trace">
-              {trace.map((line, i) => <p key={i} className="thinking__trace-line">{line}</p>)}
-            </div>
-          )}
-          {rounds.map((r) => (
-            <div key={r.id} className="tool-row">
-              {r.status === "running" && streaming
-                ? <span className="tool-spin" aria-hidden="true" />
-                : <Check size={12} aria-hidden="true" />}
-              <div className="tool-row-main">
-                <div className="tool-row-top">
-                  <strong>{prettyToolName(r.name)}</strong>
-                  {r.ms ? <span>{(r.ms / 1000).toFixed(1)}s</span> : null}
-                </div>
-                {r.query ? <div className="tool-query">{r.query}</div> : null}
-                {r.result ? <div className="tool-result">{r.result}</div> : null}
-                {!!r.sources?.length && <div className="tool-sources">{r.sources.length} source{r.sources.length === 1 ? "" : "s"}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -120,15 +48,6 @@ function fmtDur(ms?: number): string | null {
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m ${s % 60}s`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-function prettyToolName(name: string): string {
-  if (name === "web_search" || name === "search") return "Web search";
-  if (name === "run_code") return "Run code";
-  if (name === "fetch_page") return "Read page";
-  const p = name.split("__");
-  if (p[0] === "mcp" && p.length >= 3) return `${p[1]}/${p.slice(2).join("__")}`;
-  return name || "tool";
 }
 
 // Re-parse streaming text at ~30fps instead of per token.
@@ -145,11 +64,12 @@ function useThrottled<T>(value: T, ms = 33): T {
   return v;
 }
 
-const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft, onOpenArtifact }: {
+const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegenerate, onVersion, onToast, onSelect, onEditDraft, onOpenArtifact, onPreviewHtml }: {
   msg: LucaMessage; session: Session; isLast: boolean;
   onRegenerate: (sid: string, uid: string) => void;
   onVersion: (sid: string, uid: string, i: number) => void;
   onOpenArtifact: (id: string) => void;
+  onPreviewHtml: (title: string, html: string) => void;
   onToast: (m: string) => void;
   onSelect: (text: string) => void;
   onEditDraft: (text: string) => void;
@@ -176,15 +96,6 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
   const shownTrimmed = typeof shown === "string" ? shown.replace(/\s+$/, "") : shown;
   const copyThis = async () => { if (await copyText(shown || msg.content)) { setCopied(true); onToast("Copied"); setTimeout(() => setCopied(false), 1400); } };
   const dur = fmtDur(msg.elapsedMs ?? msg.thinkingMs);
-  // While streaming with no content yet: live process view only.
-  if (msg.streaming && !display) {
-    return (
-      <div className="msg msg-luca">
-        <div className="who">Luca</div>
-        <ProcessView msg={msg} />
-      </div>
-    );
-  }
   return (
     <div className="msg msg-luca" aria-busy={msg.streaming || undefined}>
       <div className="who">Luca</div>
@@ -192,7 +103,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
 
         {isContentError ? null : shown ? (
           <div className="bubble">
-            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} /></Suspense>
+            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} live={msg.streaming} /></Suspense>
           </div>
         ) : (!msg.reasoning && msg.streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null)}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
@@ -268,6 +179,16 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
                 ))}
               </span>
             )}
+            {!msg.streaming && shown && (() => {
+              const m = /```html\n([\s\S]*?)```/.exec(shown);
+              const html = m && m[1] ? m[1].trim() : "";
+              if (html.length < 800) return null;
+              return (
+                <span className="artifact-links">
+                  <button className="mini-btn" onClick={() => onPreviewHtml("HTML preview", html)}>Open preview</button>
+                </span>
+              );
+            })()}
             {showVersion && (
               <span className="version-nav">
                 <button className="icon-btn" disabled={idx === 0}
@@ -351,7 +272,7 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   );
 }, (a, b) => a.msg === b.msg && a.session.id === b.session.id);
 
-export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast, onEditDraft, onOpenArtifact }: Props) {
+export default function ChatArea({ session, settings, onSuggestion, onRegenerate, onEditResend, onVersion, onToast, onEditDraft, onOpenArtifact, onPreviewHtml }: Props) {
   const threadRef = useRef<HTMLDivElement>(null);
   const prevKey = useRef("");
   // Scroll-down pill: visible only when the user has scrolled well above the
@@ -392,7 +313,7 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
   });
   const renderMsg = (m: LucaMessage, i: number) => m.role === "user"
     ? <UserMsg key={m.uid} msg={m} session={session!} onEditResend={onEditResend} onToast={onToast} />
-    : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} onOpenArtifact={onOpenArtifact} />;
+    : <AssistantMsg key={m.uid} msg={m} session={session!} isLast={i === msgs.length - 1} onRegenerate={onRegenerate} onVersion={onVersion} onToast={onToast} onSelect={onSuggestion} onEditDraft={onEditDraft} onOpenArtifact={onOpenArtifact} onPreviewHtml={onPreviewHtml} />;
   // Screen-reader announcements for streaming — never on the message text
   // itself (that would read every token).
   const streaming = msgs.some((m) => m.streaming);

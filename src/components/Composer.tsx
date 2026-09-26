@@ -122,6 +122,11 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
   useEffect(() => {
     let n = 0;
     const onPaste = (e: ClipboardEvent) => {
+      // Only hijack pastes aimed at the composer itself — a file pasted into
+      // search/rename inputs must behave normally there.
+      const t = e.target as HTMLElement | null;
+      if (!t || (t.tagName !== "TEXTAREA" && !(t instanceof HTMLInputElement))) return;
+      if (taRef.current && t !== taRef.current) return;
       const items = e.clipboardData?.items;
       if (!items) return;
       const files: File[] = [];
@@ -151,7 +156,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
     if (!SR) { onToast("Voice input isn't supported in this browser"); return; }
     if (listening) { recogRef.current?.stop(); setListening(false); return; }
     const r = new SR();
-    r.lang = "en-US"; r.continuous = false; r.interimResults = false;
+    r.lang = (navigator.language || "en-US").split(",")[0] || "en-US"; r.continuous = false; r.interimResults = false;
     r.onresult = (e) => { const t = e.results[0]?.[0]?.transcript || ""; if (t) setText((p) => (p ? p + " " : "") + t); };
     r.onend = () => setListening(false);
     r.onerror = () => { setListening(false); onToast("Couldn't hear anything — try again"); };
@@ -180,7 +185,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
         <input ref={fileRef} type="file" multiple hidden
           onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
         <div className="write">
-          <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false}
+          <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} spellCheck={true}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               if (!coarse && settings.enterToSend && !e.shiftKey) { e.preventDefault(); doSend(); }
