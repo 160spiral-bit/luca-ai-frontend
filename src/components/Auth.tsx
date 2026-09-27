@@ -151,7 +151,13 @@ export default function Auth({ onAuth, onGuest }: Props) {
     if ((p === "google" && !oauth.google) || (p === "github" && !oauth.github)) return fail(`${p === "google" ? "Google" : "GitHub"} sign-in is not configured on the server yet`);
     // Tell the backend where to land after OAuth so sign-in doesn't yank
     // you onto a different frontend (e.g. Vercel -> github.io).
-    window.location.href = base() + `/api/auth/${p}?redirect=${encodeURIComponent(window.location.origin)}`;
+    //
+    // Send the full app URL, not window.location.origin: on a project Pages
+    // site the app lives under a subpath (/luca-ai-web), and an origin-only
+    // value makes the callback land on the account root, which is GitHub's
+    // "There isn't a GitHub Pages site here" 404.
+    const appUrl = window.location.origin + window.location.pathname.replace(/\/+$/, "");
+    window.location.href = base() + `/api/auth/${p}?redirect=${encodeURIComponent(appUrl)}`;
   };
   const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); };
 
