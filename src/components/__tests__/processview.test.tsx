@@ -23,13 +23,32 @@ describe("ProcessView", () => {
   it("derives elapsed from msg.startedAt, so a REMOUNT does not reset it", () => {
     const startedAt = Date.now() - 7000; // began 7s ago
     const msg = base({ streaming: true, startedAt });
+    // Elapsed rides in the pill label while thinking ("Thought for 7s"), which
+    // is the same wording the finished pill settles on.
     const first = render(<ProcessView msg={msg} />);
-    expect(screen.getByText("7s")).toBeTruthy();
+    expect(screen.getByText("Thought for 7s")).toBeTruthy();
     first.unmount();
     render(<ProcessView msg={msg} />); // remount (virtualisation / chat switch)
-    expect(screen.getByText("7s")).toBeTruthy(); // old code showed 0s here
+    expect(screen.getByText("Thought for 7s")).toBeTruthy(); // old code showed 0s here
     act(() => { vi.advanceTimersByTime(3000); });
-    expect(screen.getByText("10s")).toBeTruthy();
+    expect(screen.getByText("Thought for 10s")).toBeTruthy();
+  });
+
+  it("shows the thinking pill with no orb, shimmer or rotating chevron", () => {
+    render(<ProcessView msg={base({ streaming: true, startedAt: Date.now() - 3000, reasoning: "step one" })} />);
+    expect(screen.getByText("Thought for 3s")).toBeTruthy();
+    // The live header uses the same minimal pill as the finished one.
+    expect(document.querySelector(".pv--live")).toBeTruthy();
+    expect(document.querySelector(".pv-orb")).toBeNull();
+    expect(document.querySelector(".pv-peek")).toBeNull();
+    const btn = screen.getByRole("button");
+    // Auto-opens while thinking, so the down chevron shows first...
+    expect(btn.getAttribute("aria-expanded")).toBe("true");
+    expect(btn.querySelector("svg")?.innerHTML).toContain("m6 9 6 6 6-6");
+    // ...and collapsing swaps to the right chevron rather than rotating one.
+    fireEvent.click(btn);
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(btn.querySelector("svg")?.innerHTML).toContain("m9 18 6-6-6-6");
   });
 
   it("is auto-open while thinking with no content, and the header button works", () => {

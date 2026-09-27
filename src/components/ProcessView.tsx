@@ -90,9 +90,11 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
   /* ----- label ---------------------------------------------------- */
   let label: string;
   if (streaming) {
-    if (msg.stageLabel) label = msg.stageLabel;
-    else if (running.length) label = `Using ${running.map((r) => prettyToolName(r.name)).join(", ")}`;
-    else if (!msg.content) label = hasTrace ? "Thinking" : "Working on it";
+    if (running.length) label = `Using ${running.map((r) => prettyToolName(r.name)).join(", ")}`;
+    // While thinking (nothing written yet) show elapsed thought time, the same
+    // wording the finished pill settles on. A live stage label like "Analyzing
+    // context" is deliberately ignored here: it churns and reads as noise.
+    else if (!msg.content) label = elapsed > 0 ? `Thought for ${elapsed}s` : "Thinking";
     else label = "Writing";
   } else {
     const bits: string[] = [];
@@ -107,7 +109,6 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
   }
 
   const bodyId = `pv-${msg.uid}`;
-  const lastLine = reasoning.split(/\n+/).filter(Boolean).slice(-1)[0] || "";
 
   return (
     <div className={`pv${streaming ? " pv--live" : " pv--done"}${open ? " pv--open" : ""}`}>
@@ -118,25 +119,15 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
         aria-expanded={open}
         aria-controls={bodyId}
       >
-        {/* Finished state is text-only (no leading icon); live keeps the orb. */}
-        {streaming && (
-          <span className="pv-icon" aria-hidden="true">
-            <span className="pv-orb" />
-          </span>
-        )}
         <span className="pv-label">{label}</span>
-        {streaming && elapsed > 0 && <span className="pv-time">{elapsed}s</span>}
-        {/* Right chevron when collapsed, down chevron when expanded. The live
-            header keeps the single rotating chevron exactly as before. */}
-        {streaming || open ? (
+        {/* Right chevron when collapsed, down chevron when expanded - the same
+            swap the finished pill uses, for both live and done. */}
+        {open ? (
           <ChevronDown size={13} className="pv-chev" aria-hidden="true" />
         ) : (
           <ChevronRight size={13} className="pv-chev" aria-hidden="true" />
         )}
       </button>
-
-      {/* One-line peek at the latest thought while collapsed and live. */}
-      {streaming && !open && lastLine && <div className="pv-peek" aria-hidden="true">{lastLine}</div>}
 
       {/* Height animates via grid rows, no JS measuring. */}
       <div className="pv-collapse" id={bodyId} data-open={open}>

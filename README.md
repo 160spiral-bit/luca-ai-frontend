@@ -21,7 +21,7 @@ no server rewrites needed. This repo is the source of truth.
 
 `npm run dev` · `npm run build` (typecheck + bundle) · `npm run typecheck` · `npm run lint` · `npm test` (vitest). CI runs all four on push/PR.
 
-> Test-env note: if `vitest run` hangs on worker spawn (forks-pool timeout — an environmental flake on some Windows setups, not a code failure), retry with `npx vitest run --maxWorkers=1 --pool=forks`.
+> Test-env note: if `vitest run` hangs on worker spawn (a "Failed to start forks worker / Timeout waiting for worker to respond" error - an environmental flake on some Windows setups, not a code failure), retry with `npx vitest run --pool=threads`. The threads pool has proven far more reliable here than `--maxWorkers=1 --pool=forks`, which is what an earlier version of this note suggested.
 
 ## Build / deploy
 
