@@ -109,6 +109,19 @@ export default function App() {
   useEffect(() => {
     document.body.classList.toggle("no-times", !settings.showTimestamps);
   }, [settings.showTimestamps]);
+  // iOS keyboard: 100dvh tracks browser chrome, NOT the software keyboard, so
+  // without this the composer (and Send) slides under the keyboard on focus
+  // with no other way to send. visualViewport.height is the actually-visible
+  // height; CSS consumes it as --vvh with a 100dvh fallback.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const set = () => document.documentElement.style.setProperty("--vvh", `${vv.height}px`);
+    set();
+    vv.addEventListener("resize", set);
+    vv.addEventListener("scroll", set);
+    return () => { vv.removeEventListener("resize", set); vv.removeEventListener("scroll", set); };
+  }, []);
 
   // Sonner toasts: persistent live region, real announcements, dismissable.
   const toast = useCallback((text: string) => {

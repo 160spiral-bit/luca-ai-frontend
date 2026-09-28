@@ -7,6 +7,12 @@
 @import "@fontsource/fraunces/600-italic.css";
 
 :root {
+  /* Safe-area tokens: viewport-fit=cover extends layout under the notch and
+     home indicator, so fixed chrome must pad against these, not fixed px. */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
   --bg: #141416;
   --side: #101011;
   --card: #1b1b1e;
@@ -97,21 +103,23 @@ body {
   background: var(--bg);
   color: var(--txt);
   font: 400 14px/1.5 var(--sans);
-  height: 100dvh;
+  /* --vvh is driven by window.visualViewport in App: 100dvh tracks browser
+     chrome, not the iOS software keyboard, so dvh alone slides Send under it. */
+  height: var(--vvh, 100dvh);
   overflow: hidden;
 }
 button { font-family: var(--sans); }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { background: none; border: none; cursor: pointer; padding: 0; }
 :focus-visible { outline: 2px solid var(--line2); outline-offset: 2px; }
-#root { min-height: 100dvh; }
+#root { min-height: var(--vvh, 100dvh); }
 [hidden] { display: none !important; }
 
 /* ---------- app shell ---------- */
-.app { display: flex; height: 100dvh; }
+.app { display: flex; height: var(--vvh, 100dvh); }
 .app.collapsed .sidebar { display: none; }
 .open-sidebar {
-  position: fixed; top: 14px; left: 14px; z-index: 10;
+  position: fixed; top: calc(14px + var(--sat)); left: calc(14px + var(--sal)); z-index: 10;
   width: 34px; height: 34px;
   border: 1px solid var(--line); border-radius: 9px;
   background: var(--side); color: var(--mut);
@@ -120,7 +128,7 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .open-sidebar:hover { border-color: var(--line2); color: var(--txt); }
 .app.collapsed .open-sidebar { display: grid; }
 .sidebar.hidden-side { display: none; }
-.sidebar.mobile-open { display: flex; position: fixed; left: 0; top: 0; bottom: 0; z-index: 60; box-shadow: var(--shadow); }
+.sidebar.mobile-open { display: flex; position: fixed; left: 0; top: var(--sat); bottom: 0; z-index: 60; box-shadow: var(--shadow); padding-bottom: calc(14px + var(--sab)); }
 /* Stuck-collapsed guard: the drawer must win over the desktop collapse rule. */
 .app.collapsed .sidebar.mobile-open { display: flex; }
 /* The nav scrim is mobile-only — desktop dialogs have their own overlay. */
@@ -188,14 +196,25 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .chat-item time { font-size: 11px; color: var(--fnt); margin-left: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .chat-item.active { background: var(--s1); color: var(--txt); }
 .chat-item .del {
-  display: none; position: absolute; top: 50%; transform: translateY(-50%);
+  display: grid; opacity: 0; position: absolute; top: 50%; transform: translateY(-50%);
   width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 6px;
   background: var(--card); color: var(--fnt);
   place-items: center; cursor: pointer;
+  transition: opacity 0.12s var(--ease-out);
 }
 .chat-item .del-delete { right: 6px; }
 .chat-item .del-more { right: 30px; }
-.chat-item:hover .del { display: grid; }
+/* display:none removes the buttons from the tab order entirely, so hover-only
+   reveal is unreachable by keyboard and by any touch device. Opacity keeps
+   them focusable; :focus-within covers keyboard, (hover: none) covers touch. */
+.chat-item:hover .del,
+.chat-item:focus-within .del,
+.chat-item.active .del { opacity: 1; }
+@media (hover: none) {
+  .chat-item .del { opacity: 1; width: 40px; height: 40px; }
+  .chat-item .del-delete { right: 44px; }
+  .chat-item .del-more { right: 2px; }
+}
 .chat-item:hover time { visibility: hidden; }
 .chat-item .del:hover { color: var(--danger); background: var(--danger-soft); }
 .row-menu-pop {
@@ -265,7 +284,11 @@ button { background: none; border: none; cursor: pointer; padding: 0; }
 .msg .who { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--mut); margin-bottom: 6px; }
 .msg-user .who { display: none; }
 .msg .hover-only { display: none; }
-.msg:hover .hover-only { display: inline-flex; }
+.msg:hover .hover-only,
+.msg:focus-within .hover-only { display: inline-flex; }
+@media (hover: none) {
+  .msg .hover-only { display: inline-flex; }
+}
 /* User hover actions float over the gap below the message so appearing
    never pushes the next message down. */
 .msg-user .msg-meta.hover-only {
@@ -296,7 +319,7 @@ body.no-times .msg-time { display: none; }
 .chip svg { flex-shrink: 0; }
 
 /* ---------- composer ---------- */
-.conv .composer-zone { width: min(720px, 100%); margin: 0 auto; padding: 0 4vw 18px; }
+.conv .composer-zone { width: min(720px, 100%); margin: 0 auto; padding: 0 max(4vw, var(--sal)) calc(18px + var(--sab)) max(4vw, var(--sar)); }
 .hero .composer-zone { width: 100%; }
 .composer {
   width: 100%; border-radius: 16px;
@@ -422,6 +445,12 @@ body.no-times .msg-time { display: none; }
 .field input[type="text"], .field input[type="email"], .field input[type="password"], .field textarea, .field select {
   width: 100%; background: var(--s1); border: 1px solid var(--line); border-radius: 9px;
   padding: 10px 14px; font-size: 13px; color: var(--txt); outline: none;
+}
+/* iOS zooms on focus for anything under 16px and never zooms back out against
+   an overflow:hidden + dvh layout — the session stays magnified. */
+@media (max-width: 800px) {
+  .field input[type="text"], .field input[type="email"], .field input[type="password"],
+  .field textarea, .field select, .luca-input, .edit-textarea { font-size: 16px; }
 }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--line2); }
 .field .seg { display: flex; gap: 4px; }
@@ -652,7 +681,7 @@ body.no-times .msg-time { display: none; }
 /* ---------- auth ---------- */
 .center-page { flex: 1; display: grid; place-items: center; padding: 24px; position: relative; overflow-y: auto; }
 .auth-card { width: min(400px, 94vw); }
-.luca-auth { display: flex; width: 100%; max-width: 960px; min-height: min(640px, 92dvh); }
+.luca-auth { display: flex; width: 100%; max-width: 960px; min-height: min(640px, 92dvh); margin: auto; }
 .luca-auth-left { flex: 1 1 55%; display: flex; align-items: center; justify-content: center; padding: 48px 40px; }
 .luca-auth-inner { width: min(380px, 100%); }
 .luca-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 28px; }
@@ -735,7 +764,7 @@ body.no-times .msg-time { display: none; }
   .open-sidebar { display: none !important; }
   /* Home-screen menu: no topbar on empty chats, so pin it where the conv
      hamburger lives — top-left, clear of the composer. */
-  .hero-menu-btn { position: fixed; top: 14px; left: 14px; z-index: 10; }
+  .hero-menu-btn { position: fixed; top: calc(14px + var(--sat)); left: calc(14px + var(--sal)); z-index: 10; }
   .only-desktop { display: none !important; }
   .artifact-panel { width: 100vw; max-width: 100vw; }
   .conv .composer-zone { width: 94vw; }
@@ -744,6 +773,13 @@ body.no-times .msg-time { display: none; }
   .bubble { max-width: 88%; }
   .luca-auth-right { display: none; }
   .luca-auth-left { padding: 48px 20px; }
+}
+/* Coarse pointers (touch): 44px minimum targets. Desktop keeps its compact
+   sizes; only touch devices pay the space cost. */
+@media (pointer: coarse) {
+  .icon-btn, .tool { width: 44px; height: 44px; }
+  .send { width: 44px; height: 44px; }
+  .chat-item .del { width: 40px; height: 40px; }
 }
 @media (min-width: 801px) {
   .only-mobile { display: none !important; }
