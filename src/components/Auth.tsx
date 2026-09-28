@@ -124,7 +124,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const reset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim() || !password) return fail("Enter the code and a new password");
-    if (password.length < 6) return fail("Password must be at least 6 characters");
+    if (password.length < 8) return fail("Password must be at least 8 characters");
     setBusy(true); setErr(null);
     try {
       const r = await fetch(base() + "/api/auth/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), code: code.trim(), password }) });
@@ -207,7 +207,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
                   </div>
                 )}
                 <input className="luca-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="email" aria-label="Email" />
-                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (6+ characters)" autoComplete="new-password" aria-label="Password" />
+                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (8+ characters)" autoComplete="new-password" aria-label="Password" />
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Creating account…" : "Continue with email"}</button>
                 <div className="luca-row">
                   <span />
@@ -241,7 +241,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
               <form onSubmit={reset} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <p className="luca-hint">Enter the code from your email, then pick a new password.</p>
                 <input className="luca-input luca-code" type="text" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="123456" inputMode="numeric" aria-label="Reset code" />
-                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password (6+ characters)" autoComplete="new-password" aria-label="New password" />
+                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password (8+ characters)" autoComplete="new-password" aria-label="New password" />
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Saving…" : "Set new password"}</button>
                 <div className="luca-row">
                   <span />
