@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronRight, Globe, Code2, FileText, Wrench } from "lucide-react";
 import type { LucaMessage, ToolRound } from "../lib/store";
 
@@ -52,19 +52,6 @@ function summarizeTools(rounds: ToolRound[]): string | null {
   return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
-/** Elapsed seconds derived from a timestamp stored ON THE MESSAGE, so it never
- *  resets when the component remounts (virtualisation, chat switch, reload). */
-function useElapsed(startedAt: number | undefined, active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    setNow(Date.now());
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
-}
-
 /* ------------------------------------------------------------------ */
 /* component                                                          */
 /* ------------------------------------------------------------------ */
@@ -78,7 +65,6 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
   const reasoning = (msg.reasoning || "").trim();
   const hasTrace = reasoning.length > 0;
   const running = rounds.filter((r) => r.status === "running" && streaming);
-  const elapsed = useElapsed(msg.startedAt, streaming);
 
   if (!streaming && !hasTrace && rounds.length === 0) return null;
 
@@ -91,10 +77,10 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
   let label: string;
   if (streaming) {
     if (running.length) label = `Using ${running.map((r) => prettyToolName(r.name)).join(", ")}`;
-    // While thinking (nothing written yet) show elapsed thought time, the same
-    // wording the finished pill settles on. A live stage label like "Analyzing
-    // context" is deliberately ignored here: it churns and reads as noise.
-    else if (!msg.content) label = elapsed > 0 ? `Thought for ${elapsed}s` : "Thinking";
+    // Live thinking stays present-tense with no seconds: the "Thought for Xs"
+    // wording is reserved for the finished pill. A live stage label is
+    // deliberately ignored here: it churns and reads as noise.
+    else if (!msg.content) label = "Thinking…";
     else label = "Writing";
   } else {
     const bits: string[] = [];

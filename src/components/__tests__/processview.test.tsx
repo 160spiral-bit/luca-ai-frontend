@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import ProcessView from "../ProcessView";
 import type { LucaMessage, ToolRound } from "../../lib/store";
 
@@ -20,27 +20,26 @@ describe("ProcessView", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("derives elapsed from msg.startedAt, so a REMOUNT does not reset it", () => {
-    const startedAt = Date.now() - 7000; // began 7s ago
-    const msg = base({ streaming: true, startedAt });
-    // Elapsed rides in the pill label while thinking ("Thought for 7s"), which
-    // is the same wording the finished pill settles on.
+  it("keeps live thinking present-tense with no seconds, stable across remount", () => {
+    const msg = base({ streaming: true, startedAt: Date.now() - 12000, reasoning: "step one" });
+    // "Thought for Xs" is reserved for the finished pill; live thinking never
+    // shows seconds, so there is no ticking number to go stale on remount.
     const first = render(<ProcessView msg={msg} />);
-    expect(screen.getByText("Thought for 7s")).toBeTruthy();
+    expect(screen.getByText("Thinking…")).toBeTruthy();
+    expect(screen.queryByText(/Thought for/)).toBeNull();
     first.unmount();
     render(<ProcessView msg={msg} />); // remount (virtualisation / chat switch)
-    expect(screen.getByText("Thought for 7s")).toBeTruthy(); // old code showed 0s here
-    act(() => { vi.advanceTimersByTime(3000); });
-    expect(screen.getByText("Thought for 10s")).toBeTruthy();
+    expect(screen.getByText("Thinking…")).toBeTruthy();
   });
 
-  it("shows the thinking pill with no orb, shimmer or rotating chevron", () => {
+  it("shows the live reasoning trace while thinking, with no orb", () => {
     render(<ProcessView msg={base({ streaming: true, startedAt: Date.now() - 3000, reasoning: "step one" })} />);
-    expect(screen.getByText("Thought for 3s")).toBeTruthy();
+    expect(screen.getByText("Thinking…")).toBeTruthy();
     // The live header uses the same minimal pill as the finished one.
     expect(document.querySelector(".pv--live")).toBeTruthy();
     expect(document.querySelector(".pv-orb")).toBeNull();
-    expect(document.querySelector(".pv-peek")).toBeNull();
+    // The trace is visible by default: auto-open while thinking with no content.
+    expect(screen.getByText("step one")).toBeTruthy();
     const btn = screen.getByRole("button");
     // Auto-opens while thinking, so the down chevron shows first...
     expect(btn.getAttribute("aria-expanded")).toBe("true");

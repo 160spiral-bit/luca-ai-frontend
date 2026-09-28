@@ -793,13 +793,8 @@ body.no-times .msg-time { display: none; }
 .pv-head:hover { color: var(--txt); }
 .pv-head:focus-visible { outline: 2px solid var(--line2); outline-offset: -2px; border-radius: 12px; }
 
-.pv-icon { display: inline-grid; place-items: center; width: 14px; height: 14px; flex-shrink: 0; color: var(--fnt); }
-
-/* Plain text in both states. The old shimmer sweep only existed on the live
-   label and made the pill look like it was mid-animation rather than working. */
+/* Plain text in both states. */
 .pv-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.pv-time { flex-shrink: 0; font-size: 11.5px; color: var(--fnt); font-variant-numeric: tabular-nums; }
 
 .pv-chev { flex-shrink: 0; color: var(--fnt); transition: transform 0.25s var(--ease-out); }
 
@@ -849,10 +844,8 @@ body.no-times .msg-time { display: none; }
 
 /* reduced motion: keep a gentle, non-moving "alive" signal (NOT frozen) */
 @media (prefers-reduced-motion: reduce) {
-  .pv--live .pv-label { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--txt); }
   .pv-orb { animation: pv-pulse-soft 2s ease-in-out infinite !important; }
   .pv-orb::after { display: none; }
   .pv-collapse, .pv-chev, .pv { transition: none !important; }
-  .pv-peek { animation: none; }
 }
 @keyframes pv-pulse-soft { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
