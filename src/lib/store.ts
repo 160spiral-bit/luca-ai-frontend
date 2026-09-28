@@ -63,11 +63,14 @@ export const clearDeviceState = () => {
 };
 export const loadSettings = (): Settings => {
   const raw = get(K.settings);
-  if (!raw) return { ...DEFAULT_SETTINGS };
+  // defaultSettings() deep-copies personality; a bare spread would share the
+  // object across every default, so mutating one settings object would mutate
+  // them all.
+  if (!raw) return defaultSettings();
   try {
     const p = JSON.parse(raw);
     return { ...DEFAULT_SETTINGS, ...p, personality: { ...DEFAULT_SETTINGS.personality, ...(p.personality || {}) } };
-  } catch { return { ...DEFAULT_SETTINGS }; }
+  } catch { return defaultSettings(); }
 };
 export const saveSettings = (s: Settings) => set(K.settings, JSON.stringify(s));
 

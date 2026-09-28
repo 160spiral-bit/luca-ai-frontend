@@ -6,7 +6,7 @@ interface ChartSpec { type: "bar" | "line" | "pie"; labels: string[]; values: nu
 export default function ChartBlock({ code }: { code: string }) {
   // xychart-beta is mermaid, not JSON chart — delegate to Mermaid with logging
   if (code.trim().startsWith("xychart-beta") || code.trim().startsWith("xychart")) {
-    console.warn("[viz] ChartBlock received xychart mermaid syntax, delegating to Mermaid:", code.slice(0, 80));
+    if (import.meta.env.DEV) console.warn("[viz] ChartBlock received xychart mermaid syntax, delegating to Mermaid:", code.slice(0, 80));
     return <Mermaid code={code} />;
   }
   let spec: ChartSpec | null = null;
@@ -31,10 +31,11 @@ export default function ChartBlock({ code }: { code: string }) {
       }
     }
   } catch (err) {
-    console.error("[viz] ChartBlock JSON parse failed:", err, "code:", code.slice(0, 200));
+    // Partial JSON while streaming hits this on nearly every token — dev only.
+    if (import.meta.env.DEV) console.error("[viz] ChartBlock JSON parse failed:", err, "code:", code.slice(0, 200));
   }
   if (!spec) {
-    console.error("[viz] ChartBlock invalid spec, falling back to code:", code.slice(0, 200));
+    if (import.meta.env.DEV) console.error("[viz] ChartBlock invalid spec, falling back to code:", code.slice(0, 200));
     return <pre><code>{code}</code></pre>;
   }
   const W = 560, H = 260, padL = 40, padB = 62, padT = 14;

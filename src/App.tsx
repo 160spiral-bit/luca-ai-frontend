@@ -66,7 +66,11 @@ export default function App() {
   }, []);
   const [tier, setTier] = useState<Tier>(() => loadTier());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [streaming, setStreaming] = useState<{ sessionId: string; msgUid: string } | null>(null);
+  // Streams are per-chat: sessionId -> assistant msgUid. The old single-slot
+  // {sessionId, msgUid} + single AbortController meant a second chat's stream
+  // destroyed the first's Stop control and left it uncancellable.
+  const [streams, setStreams] = useState<Record<string, string>>({});
+  const aborts = useRef(new Map<string, AbortController>());
   const [panel, setPanel] = useState<"settings" | "profile" | "admin" | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -79,7 +83,6 @@ export default function App() {
   const [nameDraft, setNameDraft] = useState("");
   const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
   const [composerDraft, setComposerDraft] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const saveTimer = useRef<number | undefined>(undefined);
   // Monotonic generation counter: regenerate() reuses the message uid, so a
   // late followups() result from generation N must not land on generation N+1.
@@ -88,7 +91,30 @@ export default function App() {
   const activeSession = sessions.find((s) => s.id === activeId) || null;
   // FIX 2a: generation state is scoped to its session. The composer only
   // shows "stop" when the running stream belongs to the open chat.
-  const streamingActive = !!streaming && streaming.sessionId === activeId;
+  const streamingActive = !!activeId && !!streams[activeId];
+  // Stop one chat (defaults to the open one). Aborts only that chat's
+  // controller and clears only its slot — other chats keep streaming.
+  const stopChat = useCallback((sid?: string | null) => {
+    const id = sid ?? activeIdRef.current;
+    if (!id) return;
+    aborts.current.get(id)?.abort();
+    aborts.current.delete(id);
+    setStreams((p) => {
+      if (!(id in p)) return p;
+      const n = { ...p };
+      delete n[id];
+      return n;
+    });
+  }, []);
+  const stopAllChats = useCallback(() => {
+    for (const c of aborts.current.values()) { try { c.abort(); } catch {} }
+    aborts.current.clear();
+    setStreams({});
+  }, []);
+  // Ref mirror of streams for guards inside callbacks (send/regenerate/edit)
+  // that must not close over stale state.
+  const streamsRef = useRef<Record<string, string>>({});
+  useEffect(() => { streamsRef.current = streams; }, [streams]);
   // Live mirrors for async callbacks (follow-ups) that outlive their closure.
   const sessionsRef = useRef(sessions);
   const activeIdRef = useRef(activeId);
@@ -106,6 +132,8 @@ export default function App() {
   const hydrated = useRef(false);
   const adoptRef = useRef<Session[] | null>(null);
   const hydrateGen = useRef(0);
+  // Consecutive failed cloud uploads (reset on success). See the POST effect.
+  const syncFails = useRef(0);
   useEffect(() => {
     document.body.classList.toggle("no-times", !settings.showTimestamps);
   }, [settings.showTimestamps]);
@@ -131,8 +159,7 @@ export default function App() {
   // clean. Called on sign-out AND before hydrating a new sign-in. Defined
   // above the bootstrap effect so the dep array is honest.
   const wipeClientState = useCallback(() => {
-    abortRef.current?.abort();
-    setStreaming(null);
+    stopAllChats();
     clearDeviceState();
     setSessions([]);
     setActiveId(null);
@@ -146,7 +173,7 @@ export default function App() {
     setPanel(null);
     setSearch("");
     hydrated.current = false;
-  }, []);
+  }, [stopAllChats]);
 
   useEffect(() => {
     // Background tabs don't need to keep a free-tier host awake.
@@ -230,9 +257,11 @@ export default function App() {
     setMobileNav(false);
     setActiveArtifactId(id);
   }, []);
-  // TEMPORARY layout debugger (?debug=layout): outlines each container and
-  // prints real rects so centering can be verified without guesswork.
+  // Layout debugger (?debug=layout): outlines each container and prints real
+  // rects so centering can be verified without guesswork. Dev-only: never
+  // ships DOM mutations or console.table to production.
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
     let qs: URLSearchParams | null = null;
     try { qs = new URLSearchParams(window.location.search); } catch { return; }
     if (!qs || !String(qs.get("debug") || "").includes("layout")) return;
@@ -266,7 +295,7 @@ export default function App() {
   }, [authUser, guest]);
   const clearAllChats = useCallback(() => {
     // Real clear: wipe local state AND the server record (source of truth).
-    abortRef.current?.abort();
+    stopAllChats();
     setSessions([]);
     setActiveId(null);
     void saveSessions([], storageFullToast);
@@ -387,10 +416,16 @@ export default function App() {
     const token = loadToken();
     if (!token) return;
     const t = window.setTimeout(() => {
-      void putUserData(token, { sessions, activeId, settings, tier, profile });
+      // putUserData resolves null on network failure (never throws), so an
+      // !!ok check is the only signal. Three consecutive failures surface one
+      // toast — previously every failure was silent and uploads just stopped.
+      void putUserData(token, { sessions, activeId, settings, tier, profile }).then((r) => {
+        if (r && r.ok) { syncFails.current = 0; return; }
+        if (++syncFails.current === 3) toast("Chats aren't syncing to your account — check your connection.");
+      });
     }, 900);
     return () => window.clearTimeout(t);
-  }, [sessions, activeId, settings, tier, profile, authUser, guest]);
+  }, [sessions, activeId, settings, tier, profile, authUser, guest, toast]);
 
   const patchMsg = useCallback((sid: string, mu: string, patch: Partial<LucaMessage>) => {
     setSessions((prev) => prev.map((s) => s.id === sid
@@ -421,12 +456,9 @@ export default function App() {
 
   const runStream = useCallback(async (sid: string, auid: string, history: ChatMsg[], userText: string, t: Tier) => {
     const controller = new AbortController();
-    abortRef.current = controller;
+    aborts.current.set(sid, controller);
     const genId = ++genRef.current;
-    // Set synchronously: the post-render effect is too late to stop a fast
-    // double-send from starting two streams.
-    streamingRef.current = sid;
-    setStreaming({ sessionId: sid, msgUid: auid });
+    setStreams((p) => ({ ...p, [sid]: auid }));
     let acc = "", reasoning = "";
     const startedAt = Date.now();
     let firstContentAt: number | null = null;
@@ -516,8 +548,14 @@ export default function App() {
         commitVersion(sid, auid, acc);
       }
     } finally {
-      setStreaming(null);
-      abortRef.current = null;
+      // Clear only this chat's slot — other chats keep streaming untouched.
+      aborts.current.delete(sid);
+      setStreams((p) => {
+        if (!(sid in p)) return p;
+        const n = { ...p };
+        delete n[sid];
+        return n;
+      });
       // External background agent: premise-established naming, uses LATEST sent message, not first.
       // Fire-and-forget so it never blocks the chat turn.
       void (async () => {
@@ -564,13 +602,17 @@ export default function App() {
     let sid = activeIdRef.current;
     // Only the actively-streaming chat is locked; other chats (or a new one)
     // can always send — the backend streams them independently.
-    if (sid && streamingRef.current && streamingRef.current === sid) return;
+    if (sid && streamsRef.current[sid]) return;
     let baseMsgs: LucaMessage[] = [];
     const liveSession = sid ? sessionsRef.current.find((s) => s.id === sid) || null : null;
     if (!sid || !liveSession) {
       sid = uid();
       const chatTier = tier;
-      setSessions((p) => [{ id: sid!, title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), tier: chatTier, messages: [] }, ...p].slice(0, 500));
+      setSessions((p) => {
+        // 500-chat cap: evicting the oldest is silent data loss without this.
+        if (p.length >= 500) toast("Chat list is full — the oldest chat was removed.");
+        return [{ id: sid!, title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), tier: chatTier, messages: [] }, ...p].slice(0, 500);
+      });
       setActiveId(sid);
     } else baseMsgs = liveSession.messages;
     const sendTier = liveSession?.tier || tier;
@@ -595,10 +637,9 @@ export default function App() {
 
   // Streams are per-chat on the backend (switching chats doesn't abort), so
   // only block actions in the chat that's actually streaming — never others.
-  const streamingRef = useRef<string | null>(null);
-  useEffect(() => { streamingRef.current = streaming ? streaming.sessionId : null; }, [streaming]);
+  // (streamsRef mirror is defined with the stream map above.)
   const regenerate = useCallback((sid: string, mu: string) => {
-    if (streamingRef.current && streamingRef.current === sid) return;
+    if (streamsRef.current[sid]) return;
     const s = sessionsRef.current.find((x) => x.id === sid);
     if (!s) return;
     const idx = s.messages.findIndex((m) => m.uid === mu);
@@ -617,7 +658,7 @@ export default function App() {
   }, [tier, runStream]);
 
   const editAndResend = useCallback((sid: string, mu: string, text: string) => {
-    if (streamingRef.current && streamingRef.current === sid) return;
+    if (streamsRef.current[sid]) return;
     const s = sessionsRef.current.find((x) => x.id === sid);
     if (!s) return;
     const idx = s.messages.findIndex((m) => m.uid === mu);
@@ -706,13 +747,18 @@ export default function App() {
     window.setTimeout(() => navigate("/"), 250);
   }, [toast, wipeClientState, navigate]);
   const resetEverything = useCallback(() => {
-    abortRef.current?.abort();
+    stopAllChats();
+    window.clearTimeout(saveTimer.current);
     clearDeviceState(); clearAuth(); setGuest(false); setGuestState(false);
     setAuthUser(null); setSessions([]); setActiveId(null); setPanel(null);
+    // Reset settings too: clearDeviceState removes the stored key, but without
+    // this the in-memory object is written straight back on next render.
+    const fresh = defaultSettings();
+    setSettings(fresh);
+    document.documentElement.setAttribute("data-theme", fresh.theme);
     setTier("flash"); setProfile(null);
-    document.documentElement.setAttribute("data-theme", "dark");
     window.setTimeout(() => navigate("/"), 200);
-  }, [navigate]);
+  }, [navigate, stopAllChats]);
   const refreshSelf = useCallback(() => {
     refreshMe().then((u) => { if (u) { saveAuthUser(u); setAuthUser(u); } }).catch(() => { /* stay with cached user */ });
   }, []);
@@ -813,7 +859,7 @@ export default function App() {
         onRename={(id, t) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, title: t, userNamed: true } : s)))}
         onTogglePin={(id) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)))}
         onDelete={(id) => {
-          if (streaming?.sessionId === id) abortRef.current?.abort();
+          stopChat(id);
           setSessions((p) => p.filter((s) => s.id !== id));
           if (activeId === id) setActiveId(null);
           toast("Chat successfully deleted");
@@ -840,16 +886,16 @@ export default function App() {
             <div className="hero">
               <button className="icon-btn only-mobile hero-menu-btn" onClick={() => setMobileNav(true)} aria-label="Open sidebar"><Menu size={17} /></button>
               <h1 className="hero-greeting">{heroGreeting.head} — <em>{heroGreeting.sub}</em></h1>
-              <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => abortRef.current?.abort()}
+              <Composer streaming={streamingActive} onSend={sendFromHero} onStop={() => stopChat()}
                 tier={tier} onTierChange={(t) => setTier(t)} settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />
             </div>
           </div>
         ) : (
           <div className="conv">
-            <ChatArea session={activeSession} profile={profile} settings={settings}
+            <ChatArea session={activeSession} settings={settings}
               onSuggestion={sendSuggestion} onRegenerate={regenerate}
               onEditResend={editAndResend} onVersion={setVersion} onToast={toast} onEditDraft={handleEditDraft} onOpenArtifact={openArtifact} onPreviewHtml={previewHtml} />
-            <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => abortRef.current?.abort()}
+            <Composer streaming={streamingActive} onSend={sendMessage} onStop={() => stopChat()}
               tier={activeSession?.tier || tier}
               onTierChange={(t) => { if (activeSession) setChatTier(activeSession.id, t); else setTier(t); }}
               settings={settings} onToast={toast} prefill={composerDraft} onPrefillConsumed={() => setComposerDraft(null)} />

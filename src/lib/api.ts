@@ -168,9 +168,11 @@ export async function* streamChat(opts: {
     let sawDone = false;
     const q: EngineEvent[] = [];
     // Stall watchdog: the main stream previously had no idle timer, so a hung
-    // backend spun forever. 45s without a single byte aborts with TimeoutError,
-    // which runStream surfaces as a retryable error.
-    const STALL_MS = 45_000;
+    // backend spun forever. 90s without any sign of life aborts with
+    // TimeoutError, which runStream surfaces as a retryable error. The timer
+    // resets on bytes AND on stage/tool events, so a legitimate long tool
+    // call (run_code, fetch_page) is never mistaken for a stall.
+    const STALL_MS = 90_000;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     const beat = () => {
       if (stallTimer) clearTimeout(stallTimer);
@@ -203,7 +205,12 @@ export async function* streamChat(opts: {
         if (j.retry_after_stall) q.push({ kind: "reset" });
         if (j.meta && j.meta.model) q.push({ kind: "meta", model: String(j.meta.model), provider: String(j.meta.provider || ""), pinned: !!j.meta.pinned });
         if (typeof j.reasoning === "string" && j.reasoning) q.push({ kind: "reasoning", text: j.reasoning });
-        if (typeof j.stage === "string" && j.stage && typeof j.label === "string" && j.label) q.push({ kind: "stage", stage: j.stage, label: j.label });
+        if (typeof j.stage === "string" && j.stage && typeof j.label === "string" && j.label) {
+          // A stage event is proof of life: reset the stall watchdog so a long
+          // tool phase is never mistaken for a dead stream.
+          beat();
+          q.push({ kind: "stage", stage: j.stage, label: j.label });
+        }
         if (Array.isArray(j.sources)) {
           const srcs = j.sources.filter((s: unknown) => s && typeof (s as Source).url === "string").map((s: Source, i: number) => ({
             id: typeof s.id === "number" ? s.id : i + 1,
@@ -221,6 +228,7 @@ export async function* streamChat(opts: {
           else q.push({ kind: "content", text: "\n\n_" + j.error + "_" });
         }
         if (Array.isArray(j.tool_calls)) {
+          let sawTool = false;
           for (const tc of j.tool_calls) {
             if (tc?.function) {
               let query = "";
@@ -230,11 +238,14 @@ export async function* streamChat(opts: {
                 query = a.query || a.q || a.url || (typeof a.code === "string" ? a.code.slice(0, 120) : "") || "";
               } catch { /* non-JSON tool args — query stays empty */ }
               q.push({ kind: "tool-start", roundId: tc.id || "call_" + uid(), name: tc.function.name || "", query });
+              sawTool = true;
             }
           }
+          if (sawTool) beat();
         }
         if (j["tool-start"] && typeof j["tool-start"] === "object") {
           const t = j["tool-start"] as { roundId?: unknown; name?: unknown; query?: unknown };
+          beat();
           q.push({ kind: "tool-start", roundId: String(t.roundId || "call_" + uid()), name: String(t.name || ""), query: String(t.query || "") });
         }
         if (j["tool-end"] && typeof j["tool-end"] === "object") {

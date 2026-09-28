@@ -4,10 +4,10 @@ import { ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pen
 const Markdown = lazy(() => import("./Markdown"));
 import ProcessView from "./ProcessView";
 import { copyText } from "../lib/store";
-import type { LucaMessage, Session, Settings, Profile } from "../lib/store";
+import type { LucaMessage, Session, Settings } from "../lib/store";
 
 interface Props {
-  session: Session | null; profile: Profile | null; settings: Settings;
+  session: Session | null; settings: Settings;
   onSuggestion: (t: string) => void;
   onRegenerate: (sid: string, uid: string) => void;
   onEditResend: (sid: string, uid: string, text: string) => void;
@@ -306,7 +306,12 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
   // measurement handles wildly varying message heights; streaming growth
   // re-measures via ResizeObserver and the auto-scroll effect below sticks.
   const msgs = session?.messages ?? [];
-  const useVirtual = msgs.length > 60;
+  // Latch once set: flipping between static and virtualized layout at exactly
+  // 60 messages mid-conversation discards scroll position and the auto-scroll
+  // anchor. A ref persists the decision for the session's lifetime.
+  const virtualLatched = useRef(false);
+  if (msgs.length > 60) virtualLatched.current = true;
+  const useVirtual = virtualLatched.current;
   const virtualizer = useVirtualizer({
     count: msgs.length,
     getScrollElement: () => threadRef.current,

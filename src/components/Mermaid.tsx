@@ -36,7 +36,8 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
         // too, so model-controlled diagram source is verified, not trusted.
         if (!dead && ref.current) ref.current.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } });
       } catch (err) {
-        console.error("[viz] mermaid render failed:", err, "\ncode:", trimmed.slice(0, 400));
+        // Half-written source while streaming fails every render — dev only.
+        if (import.meta.env.DEV) console.error("[viz] mermaid render failed:", err, "\ncode:", trimmed.slice(0, 400));
         if (!dead) setFailed(true);
       }
     })();

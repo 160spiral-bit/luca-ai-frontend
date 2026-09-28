@@ -111,7 +111,7 @@ export default function Sidebar(p: Props) {
             <div className="empty-recents">{q ? "No chats found" : "No chats yet"}</div>
           )}
           {visible.map((s) => (
-            <div key={s.id} style={{ position: "relative" }}>
+            <div key={s.id} className="chat-row" style={{ position: "relative" }}>
               {renamingId === s.id ? (
                 <div style={{ display: "flex", gap: 4, padding: "2px 0" }}>
                   <input ref={renameRef} value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
@@ -121,28 +121,31 @@ export default function Sidebar(p: Props) {
                   <button className="icon-btn" style={{ width: 32, height: 32 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save name"><Check size={14} /></button>
                 </div>
               ) : (
-                <div
-                  className={`chat-item ${s.id === p.activeId ? "active" : ""}`}
-                  onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}
-                  role="button" tabIndex={0} aria-label={`Open chat ${s.title}`}
-                  aria-current={s.id === p.activeId ? "page" : undefined}
-                  onKeyDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); p.onSelect(s.id); p.onCloseMobile(); }
-                  }}
-                >
-                  <span className="title">{s.title}</span>
-                  {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
-                  <time>{relTime(lastActivity(s))}</time>
+                <>
+                  {/* Real button, not role=button: buttons nested inside a
+                      role=button container fail axe nested-interactive, and a
+                      native button gets Enter/Space/focus for free. The del
+                      buttons are siblings (same relative wrapper, so absolute
+                      positioning is unchanged), never children. */}
+                  <button
+                    className={`chat-item ${s.id === p.activeId ? "active" : ""}`}
+                    onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}
+                    aria-label={`Open chat ${s.title}`}
+                    aria-current={s.id === p.activeId ? "page" : undefined}
+                  >
+                    <span className="title">{s.title}</span>
+                    {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
+                    <time>{relTime(lastActivity(s))}</time>
+                  </button>
                   <button className="del del-delete" title="Delete" aria-label={`Delete chat ${s.title}`}
-                    onClick={(e) => { e.stopPropagation(); setConfirmDelete(s); }}>
+                    onClick={() => setConfirmDelete(s)}>
                     <Trash2 size={12} />
                   </button>
                   <button className="del del-more" title="More options" aria-label="Chat options"
-                    onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
+                    onClick={() => setMenuFor(menuFor === s.id ? null : s.id)}>
                     <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
                   </button>
-                </div>
+                </>
               )}
               {menuFor === s.id && (
                 <div ref={menuRef} className="row-menu-pop" role="menu">
