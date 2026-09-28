@@ -127,8 +127,10 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
         )}
       </button>
 
-      {/* Height animates via grid rows, no JS measuring. */}
-      <div className="pv-collapse" id={bodyId} data-open={open}>
+      {/* Height animates via grid rows, no JS measuring. Collapsed content is
+          removed from the a11y tree and tab order: grid 0fr hides it visually
+          but screen readers and find-in-page still see everything. */}
+      <div className="pv-collapse" id={bodyId} data-open={open} aria-hidden={!open || undefined} inert={!open ? true : undefined}>
         <div className="pv-collapse-inner">
           <div className="pv-body">
             {hasTrace && <div className="pv-trace" ref={traceRef}>{reasoning}</div>}

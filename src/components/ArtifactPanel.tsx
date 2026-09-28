@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import type { Artifact, ArtifactVersion } from "../lib/store";
 
 const Mermaid = lazy(() => import("./Mermaid").then((m) => ({ default: m.Mermaid })));
@@ -18,7 +19,9 @@ function withCsp(content: string): string {
 }
 function ArtifactPreview({ type, content }: { type: string; content: string }) {
   if (type === "html" || type === "svg") {
-    const doc = type === "html" ? withCsp(content) : content;
+    // Both branches get the CSP meta: the iframe `csp` attribute is unsupported
+    // in Firefox/Safari, so an untrusted svg could otherwise phone home.
+    const doc = withCsp(content);
     return (
       <iframe
         sandbox="allow-scripts"
@@ -57,8 +60,11 @@ export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifac
   const versionIdx = pinned === null || pinned > lastIdx ? lastIdx : pinned;
   const version: ArtifactVersion = artifact.versions[versionIdx] || artifact.versions[lastIdx] || { version: 0, content: "", createdAt: "" };
   return (
-    <div className="artifact-panel">
-      <div className="artifact-panel__header">
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="scrim show" />
+        <Dialog.Content className="artifact-panel" aria-label={artifact.title || "Artifact preview"}>
+    <div className="artifact-panel__header">
         <span className="artifact-panel__title">{artifact.title}</span>
         <div className="artifact-panel__tabs">
           <button onClick={() => setView("preview")} aria-pressed={view === "preview"}>Preview</button>
@@ -77,6 +83,8 @@ export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifac
       <div className="artifact-panel__body">
         {view === "preview" ? <ArtifactPreview type={artifact.artifactType} content={version.content} /> : <CodeView code={version.content} language={artifact.artifactType} />}
       </div>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

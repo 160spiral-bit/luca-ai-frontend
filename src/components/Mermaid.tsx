@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import DOMPurify from "dompurify";
 
 // Mermaid loads dynamically on first diagram — never in the eager bundle.
 // Theme-aware (was hardcoded dark) and securityLevel strict (was loose,
@@ -30,7 +31,10 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
         // render; empty code guarded above with a <pre> fallback below.
         const id = "mmd-" + Math.random().toString(36).slice(2) + "-" + Date.now().toString(36);
         const { svg } = await mermaid.render(id, trimmed);
-        if (!dead && ref.current) ref.current.innerHTML = svg;
+        // securityLevel: strict relies on Mermaid's bundled DOMPurify config —
+        // a third-party version bump away from a hole. Sanitize the SVG here
+        // too, so model-controlled diagram source is verified, not trusted.
+        if (!dead && ref.current) ref.current.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } });
       } catch (err) {
         console.error("[viz] mermaid render failed:", err, "\ncode:", trimmed.slice(0, 400));
         if (!dead) setFailed(true);

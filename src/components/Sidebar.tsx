@@ -125,7 +125,11 @@ export default function Sidebar(p: Props) {
                   className={`chat-item ${s.id === p.activeId ? "active" : ""}`}
                   onClick={() => { p.onSelect(s.id); p.onCloseMobile(); }}
                   role="button" tabIndex={0} aria-label={`Open chat ${s.title}`}
-                  onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) { p.onSelect(s.id); p.onCloseMobile(); } }}
+                  aria-current={s.id === p.activeId ? "page" : undefined}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); p.onSelect(s.id); p.onCloseMobile(); }
+                  }}
                 >
                   <span className="title">{s.title}</span>
                   {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}

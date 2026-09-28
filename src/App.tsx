@@ -463,7 +463,9 @@ export default function App() {
                 : [...(curMsg?.artifactIds || []), ev.id];
               patchMsg(sid, auid, { artifactIds: ids });
             }
-            setActiveArtifactId(ev.id);
+            // Don't yank a full-screen panel over a still-arriving answer on
+            // phones; desktop keeps the auto-open.
+            if (window.matchMedia("(min-width: 801px)").matches) setActiveArtifactId(ev.id);
             break;
           }
           case "artifact_delta": {
@@ -673,6 +675,8 @@ export default function App() {
     setActiveId(id);
     setSearch("");
     setMobileNav(false);
+    // Never show chat A's artifact while looking at chat B.
+    setActiveArtifactId(null);
   }, []);
   const handleAuth = useCallback((token: string, user: AuthUser) => {
     // New account on this device: wipe first, THEN hydrate from that
@@ -735,7 +739,7 @@ export default function App() {
   if (authLoading) {
     return <div className="center-page"><div className="spinner" /></div>;
   }
-  if (!authUser && !guest) return <Auth onAuth={handleAuth} onGuest={handleGuest} />;
+  if (!authUser && !guest) return <div className="center-page"><Auth onAuth={handleAuth} onGuest={handleGuest} /></div>;
   if (authUser && !confirmedUsername(authUser.id) && (!authUser.username || /^(googleuser|githubuser|user\d*$)/i.test(authUser.username))) {
     return (
       <div className="center-page">
@@ -820,7 +824,7 @@ export default function App() {
         authUser={authUser} profile={profile} mobileOpen={mobileNav} onCloseMobile={() => setMobileNav(false)}
         collapsed={collapsed} onToggleSidebar={() => setCollapsed((v) => !v)}
       />
-      <a href="#main" className="skip-link">Skip to chat</a>
+      <a href="#main" className="skip-link" onClick={(e) => { e.preventDefault(); const el = document.getElementById("main"); el?.setAttribute("tabindex", "-1"); el?.focus({ preventScroll: false }); }}>Skip to chat</a>
       <div className="main" id="main">
         {!isEmpty && (
         <header className="topbar">
@@ -865,7 +869,7 @@ export default function App() {
         <AdminPanel token={loadToken() || ""} authUserId={authUser.id} onRefreshSelf={refreshSelf} onClose={() => setPanel(null)} onToast={toast} />
       )}
       {activeArtifactId && artifacts[activeArtifactId] && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<div className="center-page"><div className="spinner" /></div>}>
           <ArtifactPanel key={activeArtifactId} artifact={artifacts[activeArtifactId]} onClose={() => setActiveArtifactId(null)} />
         </Suspense>
       )}

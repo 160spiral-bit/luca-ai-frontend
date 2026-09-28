@@ -110,12 +110,12 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
         <div className="msg-time">{fmtTime(msg.ts)}</div>
         {cited.length > 0 && (
           <div className="sources-pill-wrap">
-              <button className="sources-pill" onClick={() => setShowSources(!showSources)}>
+              <button className="sources-pill" aria-expanded={showSources} aria-controls={`src-${msg.uid}`} onClick={() => setShowSources(!showSources)}>
                 <Globe size={14} />
                 <span>{cited.length} web {cited.length === 1 ? "page" : "pages"}</span>
               </button>
             {showSources && (
-              <div className="sources-dropdown">
+              <div className="sources-dropdown" id={`src-${msg.uid}`}>
                 {cited.map((s) => (
                   <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="source-row">
                     <span className="num">{s.id}</span>

@@ -259,7 +259,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
       </div>
       <div className="luca-auth-right">
         <div className="luca-photo">
-          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" onError={() => setImgOk(false)} />}
+          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgOk(false)} />}
         </div>
       </div>
     </div>

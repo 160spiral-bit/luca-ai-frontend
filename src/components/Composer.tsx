@@ -200,7 +200,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
             <div ref={modelRef} className={`model-ctl${modelOpen ? " open" : ""}`}
               onClick={() => setModelOpen((v) => !v)}
               role="button" tabIndex={0} aria-expanded={modelOpen} aria-label={`Model: ${TIER_LABEL[tier]}. Activate to change.`}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModelOpen((v) => !v); } }}>
+              onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModelOpen((v) => !v); } }}>
               {(["flash", "pro"] as const).map((t) => (
                 <button key={t} className={`seg${tier === t ? " selected" : ""}`}
                   aria-pressed={tier === t} tabIndex={modelOpen ? 0 : -1}

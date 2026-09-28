@@ -125,6 +125,11 @@ function MdChunk({ body, sources }: { body: string; sources?: Source[] }) {
         // eslint-disable-next-line jsx-a11y/anchor-has-content -- link text comes from markdown at runtime
         a: (p) => <a {...p} target="_blank" rel="noreferrer noopener" />,
         table: (p) => <div className="table-wrap"><table {...p} /></div>,
+        // Model-authored # headings would otherwise duplicate the thread's own
+        // <h1> (App topbar): demote three levels so the outline stays sane.
+        h1: (p) => <h3 {...p} />,
+        h2: (p) => <h4 {...p} />,
+        h3: (p) => <h5 {...p} />,
         img: (p) => {
           const { src, alt, title } = p as { src?: string; alt?: string; title?: string };
           return <SafeImage src={src} alt={alt} title={title} />;

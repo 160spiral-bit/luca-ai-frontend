@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
+import DOMPurify from "dompurify";
 // Monospace ships with the lazy code chunk — the login page never fetches it.
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
@@ -47,7 +48,10 @@ export default function CodeBlock({ lang, code }: { lang: string; code: string }
       if (dead) return;
       try {
         if (!hl.getLoadedLanguages().includes(normLang)) throw new Error("unsupported lang");
-        if (!dead) setHtml(hl.codeToHtml(code, { lang: normLang, theme: themeName() }));
+        // Shiki escapes text nodes, but the HTML passes through this sink
+        // unexamined otherwise — sanitize so a highlighter bug or theme
+        // regression can never become script execution from model output.
+        if (!dead) setHtml(DOMPurify.sanitize(hl.codeToHtml(code, { lang: normLang, theme: themeName() })));
       } catch {
         if (!dead) setHtml(null);
       }
