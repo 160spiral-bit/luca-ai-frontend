@@ -19,7 +19,7 @@ export interface LucaMessage {
   artifactIds?: string[];
   modelMeta?: { model: string; provider: string; pinned?: boolean } | null;
 }
-export interface Session { id: string; title: string; createdAt: number; updatedAt: number; pinned?: boolean; tier?: Tier; messages: LucaMessage[]; }
+export interface Session { id: string; title: string; userNamed?: boolean; createdAt: number; updatedAt: number; pinned?: boolean; tier?: Tier; messages: LucaMessage[]; }
 export interface Settings {
   theme: "dark" | "light"; enterToSend: boolean; showTimestamps: boolean;
   autoScroll: boolean; backendUrl: string; customPrompt: string;

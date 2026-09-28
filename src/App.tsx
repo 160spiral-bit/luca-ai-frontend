@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Toaster, toast as sonnerToast } from "sonner";
+import { toast as sonnerToast } from "sonner";
 import { Menu, PanelLeft } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import ChatArea from "./components/ChatArea";
@@ -46,7 +46,18 @@ export default function App() {
     let dead = false;
     void loadSessions().then((list) => {
       if (dead) return;
-      setSessions(list);
+      if (hydrated.current) {
+        // Cloud already applied (slow IDB open, e.g. Safari private mode):
+        // merge, don't replace, or the stale local snapshot wipes the merge
+        // and nulls activeId below.
+        setSessions((prev) => {
+          const seen = new Set(prev.map((s) => s.id));
+          const extra = list.filter((s) => s && !seen.has(s.id));
+          return extra.length ? [...prev, ...extra] : prev;
+        });
+      } else {
+        setSessions(list);
+      }
       const id = loadActiveId();
       setActiveId(id && list.some((s) => s.id === id) ? id : null);
       setSessionsReady(true);
@@ -82,9 +93,19 @@ export default function App() {
   const sessionsRef = useRef(sessions);
   const activeIdRef = useRef(activeId);
   const themeRef = useRef(settings.theme);
+  // Live account mirror for the hydrate guard below: the closure's authUser is
+  // frozen at effect-run time, so without this the mid-flight account check
+  // compares a value to itself and can never fire.
+  const authUserRef = useRef(authUser);
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { themeRef.current = settings.theme; }, [settings.theme]);
+  useEffect(() => { authUserRef.current = authUser; }, [authUser]);
+  // Cloud-sync state lives here (above the IndexedDB effect) because the IDB
+  // load must interlock with it — see below.
+  const hydrated = useRef(false);
+  const adoptRef = useRef<Session[] | null>(null);
+  const hydrateGen = useRef(0);
   useEffect(() => {
     document.body.classList.toggle("no-times", !settings.showTimestamps);
   }, [settings.showTimestamps]);
@@ -266,10 +287,16 @@ export default function App() {
   // server. A load that did not succeed must never mutate local state, and
   // must leave `hydrated` false so the POST below stays blocked — that is the
   // whole guarantee: we never overwrite cloud data we failed to read.
-  const hydrated = useRef(false);
-  const adoptRef = useRef<Session[] | null>(null);
+  // (hydrated / adoptRef / hydrateGen live with the other refs above, because
+  // the IndexedDB effect below must interlock with them.)
+  // Hydrate generation: signing out (or switching accounts) while a cloud load
+  // is in flight must discard the stale response. Without this, A's chats land
+  // under B and hydrated flips true, unblocking a POST of B's empty state over
+  // B's real server record.
   useEffect(() => {
     if (!authUser || guest) return;
+    hydrated.current = false;
+    const gen = ++hydrateGen.current;
     const myId = authUser.id;
     const token = loadToken();
     if (!token) return;
@@ -290,7 +317,10 @@ export default function App() {
       })
       .then((load) => {
         if (!load || load.kind !== "ok") return;
-        if (myId !== authUser.id) return; // account changed mid-flight — discard
+        // Stale response guard: the account changed (or signed out) mid-flight.
+        // Compares against the LIVE ref, not the closure value — the old check
+        // compared authUser.id to itself and could never fire.
+        if (gen !== hydrateGen.current || myId !== authUserRef.current?.id) return;
         const d = load.data;
         // `data: null` is the server's honest "no record for this account yet"
         // and stays authoritative. A present-but-malformed record is not, so it
@@ -493,7 +523,8 @@ export default function App() {
             .map((m) => ({ role: m.role, content: m.content }));
           if (hist.length === 0) hist.push({ role: "user", content: userText }, { role: "assistant", content: acc.slice(0, 500) });
           const title = (await nameChatFromMessages(hist)) || titleFromMessage(lastUserText);
-          if (title) setSessions((p) => p.map((x) => (x.id === sid ? { ...x, title } : x)));
+          // Never overwrite a title the user chose themselves.
+          if (title) setSessions((p) => p.map((x) => (x.id === sid && !x.userNamed ? { ...x, title } : x)));
         } catch { /* background naming must never break the chat turn */ }
       })();
     }
@@ -762,7 +793,7 @@ export default function App() {
       <Sidebar
         sessions={sessions} activeId={activeId} search={search} onSearch={setSearch}
         onSelect={(id) => switchChat(id)} onNew={() => switchChat(null)}
-        onRename={(id, t) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, title: t } : s)))}
+        onRename={(id, t) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, title: t, userNamed: true } : s)))}
         onTogglePin={(id) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)))}
         onDelete={(id) => {
           if (streaming?.sessionId === id) abortRef.current?.abort();
@@ -826,7 +857,6 @@ export default function App() {
         </Suspense>
       )}
 
-      <Toaster position="bottom-center" theme={settings.theme === "light" ? "light" : "dark"} toastOptions={{ duration: 2400 }} />
     </div>
   );
 }

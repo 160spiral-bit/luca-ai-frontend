@@ -18,10 +18,11 @@ interface Props {
   onPreviewHtml: (title: string, html: string) => void;
 }
 
-function ErrorState({ modelLabel, onRetry, onEditLastMessage }: { modelLabel: string; onRetry: () => void; onEditLastMessage: () => void }) {
+function ErrorState({ modelLabel, detail, onRetry, onEditLastMessage }: { modelLabel: string; detail?: string | null; onRetry: () => void; onEditLastMessage: () => void }) {
   return (
     <div className="error-state">
-      <p className="error-state__message">{modelLabel} didn't return a response.</p>
+      <p className="error-state__message">{modelLabel} couldn't answer.</p>
+      {detail ? <p className="error-state__detail">{detail}</p> : null}
       <div className="error-state__actions">
         <button className="error-action" onClick={onRetry}>
           <RotateCcw size={15} strokeWidth={1.75} />
@@ -135,11 +136,12 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
             return session.messages.filter((m) => m.role === "user").slice(-1)[0]?.content || "";
           })();
           return (
-            <ErrorState
-              modelLabel={modelLabel}
-              onRetry={() => onRegenerate(session.id, msg.uid)}
-              onEditLastMessage={() => onEditDraft(lastUserText)}
-            />
+          <ErrorState
+            modelLabel={modelLabel}
+            detail={msg.error}
+            onRetry={() => onRegenerate(session.id, msg.uid)}
+            onEditLastMessage={() => onEditDraft(lastUserText)}
+          />
           );
         })()}
         {msg.interrupted && !msg.streaming && (
