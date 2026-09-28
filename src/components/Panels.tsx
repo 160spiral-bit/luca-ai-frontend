@@ -116,15 +116,17 @@ export function SettingsPanel({ settings, onChange, onClose, onReset }: {
 }
 
 export function ProfilePanel({ profile, authUser, onSave, onClose, onLogout, onToast }: {
-  profile: Profile; authUser: AuthUser | null;
+  // Nullable: after a failed/slow cloud load the app renders with local state
+  // and profile may still be null. The panel is then how the user sets it.
+  profile: Profile | null; authUser: AuthUser | null;
   onSave: (p: Partial<Profile>) => void; onClose: () => void; onLogout?: () => void; onToast?: (m: string) => void;
 }) {
-  const [name, setName] = useState(profile.name || "");
-  const [avatar, setAvatar] = useState<string | null>(profile.avatar ?? null);
+  const [name, setName] = useState(profile?.name || "");
+  const [avatar, setAvatar] = useState<string | null>(profile?.avatar ?? null);
   // Sync local draft when a different account's profile arrives.
   useEffect(() => {
-    setName(profile.name || "");
-    setAvatar(profile.avatar ?? null);
+    setName(profile?.name || "");
+    setAvatar(profile?.avatar ?? null);
   }, [profile]);
   const pickFile = (f: File | undefined) => {
     if (!f || !f.type.startsWith("image/")) return;
@@ -136,8 +138,8 @@ export function ProfilePanel({ profile, authUser, onSave, onClose, onLogout, onT
   };
   const commitName = () => {
     const v = name.trim();
-    if (v && v !== (profile.name || "")) { onSave({ name: v }); onToast?.("Name saved"); }
-    else setName(profile.name || "");
+  if (v && v !== (profile?.name || "")) { onSave({ name: v }); onToast?.("Name saved"); }
+  else setName(profile?.name || "");
   };
   const badges = (authUser?.badge || "").split(",").map((s) => s.trim()).filter(Boolean);
   return (

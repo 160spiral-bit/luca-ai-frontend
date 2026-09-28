@@ -132,6 +132,29 @@ export default function App() {
   const hydrated = useRef(false);
   const adoptRef = useRef<Session[] | null>(null);
   const hydrateGen = useRef(0);
+  // Onboarding resolution barrier. The username/profile gates below must not
+  // render until the account is resolved — identity (verify) AND data
+  // (hydration) — or a returning user sees "what should I call you" flash for
+  // a moment before the server answer lands, even though they chose a name
+  // long ago. Either half failing or timing out defers to the app with local
+  // state instead of hanging on a spinner: a returning offline user gets a
+  // working app, not a dead gate.
+  const resolveBarrier = useRef<{ verify: boolean | null; hydrate: boolean | null }>({ verify: null, hydrate: null });
+  const [onboarding, setOnboarding] = useState<"pending" | "ready" | "deferred">("pending");
+  // First settle wins per half (StrictMode double-invokes effects in dev; a
+  // stale timeout racing a terminal resolution must not flip the outcome).
+  const settleOnboarding = useCallback((which: "verify" | "hydrate", ok: boolean) => {
+    const b = resolveBarrier.current;
+    if (which === "verify") { if (b.verify !== null) return; b.verify = ok; }
+    else { if (b.hydrate !== null) return; b.hydrate = ok; }
+    if (b.verify !== null && b.hydrate !== null) {
+      setOnboarding(b.verify && b.hydrate ? "ready" : "deferred");
+    }
+  }, []);
+  const resetOnboardingBarrier = useCallback(() => {
+    resolveBarrier.current = { verify: null, hydrate: null };
+    setOnboarding("pending");
+  }, []);
   // Consecutive failed cloud uploads (reset on success). See the POST effect.
   const syncFails = useRef(0);
   useEffect(() => {
@@ -173,7 +196,8 @@ export default function App() {
     setPanel(null);
     setSearch("");
     hydrated.current = false;
-  }, [stopAllChats]);
+    resetOnboardingBarrier();
+  }, [stopAllChats, resetOnboardingBarrier]);
 
   useEffect(() => {
     // Background tabs don't need to keep a free-tier host awake.
@@ -186,7 +210,7 @@ export default function App() {
 
   // auth bootstrap: oauth callback, then cached session
   useEffect(() => {
-    if (isGuest()) { setGuestState(true); setAuthLoading(false); void mintGuestSession(); return; }
+    if (isGuest()) { setGuestState(true); setAuthLoading(false); setOnboarding("ready"); void mintGuestSession(); return; }
     const params = new URLSearchParams(window.location.search);
     const token = params.get("auth_token");
     const err = params.get("auth_error");
@@ -200,16 +224,18 @@ export default function App() {
         saveToken(token); saveAuthUser(u); setAuthUser(u);
         window.history.replaceState({}, "", window.location.pathname);
         setAuthLoading(false);
+        settleOnboarding("verify", true);
       }).catch(() => {
         const cached = loadAuthUser() || { id: "oauth", email: "", name: name || "User", username: username || "user", provider: "oauth", avatar: null };
         saveToken(token); saveAuthUser(cached); setAuthUser(cached);
         window.history.replaceState({}, "", window.location.pathname);
         setAuthLoading(false);
+        settleOnboarding("verify", false);
       });
       return;
     }
     const saved = loadToken();
-    if (!saved) { setAuthLoading(false); return; }
+    if (!saved) { setAuthLoading(false); settleOnboarding("verify", true); return; }
     const cached = loadAuthUser();
     if (cached) {
       setAuthUser(cached);
@@ -219,16 +245,22 @@ export default function App() {
           if (r.status === 401) { wipeClientState(); clearAuth(); setAuthUser(null); return null; }
           return r.ok ? r.json() : null;
         })
-        .then((j) => { if (j?.user) { saveAuthUser(j.user); setAuthUser(j.user); } })
-        .catch(() => {});
+        .then((j) => {
+          if (j?.user) { saveAuthUser(j.user); setAuthUser(j.user); settleOnboarding("verify", true); }
+          // No fresh user (non-401 failure): the cached account stands but is
+          // unverified, so this half is a give-up, not an answer.
+          else settleOnboarding("verify", false);
+        })
+        .catch(() => { settleOnboarding("verify", false); });
       return;
     }
     verifyToken(saved).then((user) => {
       if (user) { saveAuthUser(user); setAuthUser(user); }
       else { clearAuth(); setAuthUser(null); }
       setAuthLoading(false);
-    }).catch(() => setAuthLoading(false));
-  }, [toast, wipeClientState]);
+      settleOnboarding("verify", true);
+    }).catch(() => { settleOnboarding("verify", false); setAuthLoading(false); });
+  }, [toast, wipeClientState, settleOnboarding]);
 
   const storageFullToast = useCallback(() => {
     toast("Couldn't save chats — storage is full. Delete old chats to free space.");
@@ -341,7 +373,13 @@ export default function App() {
     const gen = ++hydrateGen.current;
     const myId = authUser.id;
     const token = loadToken();
-    if (!token) return;
+    // Give-up timer: a hanging fetch never settles the promise chain below,
+    // which would leave onboarding pending (spinner) forever. 10s is generous
+    // for one small GET; on fire we defer to the app with local state.
+    const giveUp = window.setTimeout(() => {
+      if (gen === hydrateGen.current) settleOnboarding("hydrate", false);
+    }, 10000);
+    if (!token) { window.clearTimeout(giveUp); settleOnboarding("hydrate", false); return; }
     type Load =
       | { kind: "signed-out" }
       | { kind: "unavailable" }
@@ -358,18 +396,19 @@ export default function App() {
           .catch(() => { console.warn("[Sync] Cloud load returned unreadable body — keeping local data"); return { kind: "unavailable" }; });
       })
       .then((load) => {
-        if (!load || load.kind !== "ok") return;
+        if (!load || load.kind !== "ok") { window.clearTimeout(giveUp); settleOnboarding("hydrate", false); return; }
         // Stale response guard: the account changed (or signed out) mid-flight.
         // Compares against the LIVE ref, not the closure value — the old check
-        // compared authUser.id to itself and could never fire.
-        if (gen !== hydrateGen.current || myId !== authUserRef.current?.id) return;
+        // compared authUser.id to itself and could never fire. A stale load
+        // settles nothing: the newer run owns the barrier.
+        if (gen !== hydrateGen.current || myId !== authUserRef.current?.id) { window.clearTimeout(giveUp); return; }
         const d = load.data;
         // `data: null` is the server's honest "no record for this account yet"
         // and stays authoritative. A present-but-malformed record is not, so it
         // is treated as a failed read rather than an empty account.
         if (d !== null && !Array.isArray((d as { sessions?: unknown }).sessions)) {
           console.warn("[Sync] Cloud record malformed — keeping local data");
-          return;
+          window.clearTimeout(giveUp); settleOnboarding("hydrate", false); return;
         }
         const srvSessions = d && Array.isArray(d.sessions) ? (d.sessions as Session[]) : [];
         // Adopt pre-login guest work only into an EMPTY server record, and
@@ -408,9 +447,11 @@ export default function App() {
           } else { setProfile(null); }
         }
         hydrated.current = true;
+        window.clearTimeout(giveUp); settleOnboarding("hydrate", true);
       })
-      .catch(() => { /* stay unhydrated: never POST wiped state over server data */ });
-  }, [authUser, guest, storageFullToast]);
+      .catch(() => { window.clearTimeout(giveUp); settleOnboarding("hydrate", false); /* stay unhydrated: never POST wiped state over server data */ });
+    return () => window.clearTimeout(giveUp);
+  }, [authUser, guest, storageFullToast, settleOnboarding]);
   useEffect(() => {
     if (!authUser || guest || !hydrated.current) return;
     const token = loadToken();
@@ -729,10 +770,17 @@ export default function App() {
     setGuest(false); setGuestState(false);
     saveToken(token); saveAuthUser(user);
     setAuthUser(user);
+    // The user object comes straight from the login/signup response, so it is
+    // server-fresh: the identity half is resolved synchronously. Hydration
+    // settles the data half when the server record lands.
+    settleOnboarding("verify", true);
     toast("Welcome, " + user.name);
-  }, [toast, wipeClientState]);
+  }, [toast, wipeClientState, settleOnboarding]);
   const handleGuest = useCallback(() => {
     setGuest(true); setGuestState(true); setAuthLoading(false);
+    // Guests skip account resolution entirely; the gates below behave for
+    // guests exactly as before this change.
+    setOnboarding("ready");
     // /api/chat needs a bearer token even for guests — mint the anonymous
     // session up front so the very first message is not a 401.
     void mintGuestSession();
@@ -782,11 +830,22 @@ export default function App() {
     sendMessage(t, []);
   }, [sendMessage]);
 
-  if (authLoading) {
+  // Onboarding gates must wait for account resolution (see the barrier above).
+  // Rendering them on local state alone is what flashed "what should I call
+  // you" at returning users for a moment before the server answer landed.
+  // Only spinner-gate when a gate WOULD fire on current state — otherwise a
+  // returning user with local data pays a pointless spinner delay on every
+  // login for a flash they could never have seen.
+  const usernameGateWouldFire = !!authUser && !confirmedUsername(authUser.id)
+    && (!authUser.username || /^(googleuser|githubuser|user\d*$)/i.test(authUser.username));
+  const profileGateWouldFire = !profile;
+  const gatesPending = !!authUser && !guest && (usernameGateWouldFire || profileGateWouldFire) && onboarding === "pending";
+
+  if (authLoading || gatesPending || ((authUser || guest) && !sessionsReady)) {
     return <div className="center-page"><div className="spinner" /></div>;
   }
   if (!authUser && !guest) return <div className="center-page"><Auth onAuth={handleAuth} onGuest={handleGuest} /></div>;
-  if (authUser && !confirmedUsername(authUser.id) && (!authUser.username || /^(googleuser|githubuser|user\d*$)/i.test(authUser.username))) {
+  if (authUser && onboarding === "ready" && !confirmedUsername(authUser.id) && (!authUser.username || /^(googleuser|githubuser|user\d*$)/i.test(authUser.username))) {
     return (
       <div className="center-page">
         <div className="auth-card">
@@ -810,7 +869,7 @@ export default function App() {
       </div>
     );
   }
-  if (!profile) {
+  if (!profile && onboarding === "ready") {
     return (
       <div className="center-page">
         <div className="auth-card">
