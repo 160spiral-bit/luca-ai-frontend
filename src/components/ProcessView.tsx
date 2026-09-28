@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Globe, Code2, FileText, Wrench } from "lucide-react";
 import type { LucaMessage, ToolRound } from "../lib/store";
 
@@ -66,6 +66,18 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
   const hasTrace = reasoning.length > 0;
   const running = rounds.filter((r) => r.status === "running" && streaming);
 
+  // Follow the trace while it streams: the box is capped at 220px, so without
+  // this the user stares at the first lines while the new ones pile up unseen
+  // below. Only follows while streaming; a finished trace stays put.
+  const traceRef = useRef<HTMLDivElement | null>(null);
+  const tracedLen = useRef(0);
+  useEffect(() => {
+    if (!streaming || reasoning.length === tracedLen.current) return;
+    tracedLen.current = reasoning.length;
+    const el = traceRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [streaming, reasoning]);
+
   if (!streaming && !hasTrace && rounds.length === 0) return null;
 
   // Auto-open while the model is working with nothing to read yet; collapse
@@ -119,7 +131,7 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
       <div className="pv-collapse" id={bodyId} data-open={open}>
         <div className="pv-collapse-inner">
           <div className="pv-body">
-            {hasTrace && <div className="pv-trace">{reasoning}</div>}
+            {hasTrace && <div className="pv-trace" ref={traceRef}>{reasoning}</div>}
             {rounds.length > 0 && (
               <ul className="pv-tools">
                 {rounds.map((r) => {

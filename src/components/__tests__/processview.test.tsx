@@ -32,6 +32,13 @@ describe("ProcessView", () => {
     expect(screen.getByText("Thinking…")).toBeTruthy();
   });
 
+  it("streams the trace: longer reasoning rerenders with the new text", () => {
+    const { rerender } = render(<ProcessView msg={base({ streaming: true, startedAt: Date.now(), reasoning: "step one" })} />);
+    expect(document.querySelector(".pv-trace")?.textContent).toContain("step one");
+    rerender(<ProcessView msg={base({ streaming: true, startedAt: Date.now(), reasoning: "step one\nstep two" })} />);
+    expect(document.querySelector(".pv-trace")?.textContent).toContain("step two");
+  });
+
   it("shows the live reasoning trace while thinking, with no orb", () => {
     render(<ProcessView msg={base({ streaming: true, startedAt: Date.now() - 3000, reasoning: "step one" })} />);
     expect(screen.getByText("Thinking…")).toBeTruthy();

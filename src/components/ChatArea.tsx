@@ -105,7 +105,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
           <div className="bubble">
             <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} live={msg.streaming} /></Suspense>
           </div>
-        ) : (!msg.reasoning && msg.streaming ? <span className="typing" aria-hidden="true"><i /><i /><i /></span> : null)}
+        ) : null}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
         {cited.length > 0 && (
           <div className="sources-pill-wrap">
