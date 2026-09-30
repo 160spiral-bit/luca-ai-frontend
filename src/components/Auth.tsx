@@ -161,7 +161,12 @@ export default function Auth({ onAuth, onGuest }: Props) {
   };
   const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); };
 
-  const oauthButtons = !oauthLoaded || (!oauth.google && !oauth.github) ? null : (
+  // While the config is loading (e.g. backend cold start), show a placeholder
+  // instead of nothing: otherwise the buttons visibly pop in late with zero
+  // indication that more options are coming.
+  const oauthButtons = !oauthLoaded ? (
+    <p className="luca-micro" aria-live="polite">Checking sign-in options…</p>
+  ) : (!oauth.google && !oauth.github) ? null : (
     <>
       {oauth.google && <button type="button" className="luca-btn" onClick={() => oauthGo("google")}><GoogleIcon />Continue with Google</button>}
       {oauth.github && <button type="button" className="luca-btn" onClick={() => oauthGo("github")}><GithubIcon />Continue with GitHub</button>}
