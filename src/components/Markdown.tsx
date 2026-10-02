@@ -152,8 +152,14 @@ function InlineSvg({ raw }: { raw: string }) {
   return <div className="inline-viz" dangerouslySetInnerHTML={{ __html: clean }} />;
 }
 
+function normalizeImageMarkdown(md: string): string {
+  return md
+    .replace(/!\[([^\]]*)\]\s*\n+\s*\(/g, "![$1](")
+    .replace(/!\[([^\]]*)\]\s+\(/g, "![$1](")
+    .replace(/\((https?:\/\/[^\s)]*)\s*\n+\s*([^\s)]*\))/g, "($1$2)");
+}
 function MdChunk({ body, sources }: { body: string; sources?: Source[] }) {
-  const text = useMemo(() => bindCitations(body, sources), [body, sources]);
+  const text = useMemo(() => bindCitations(normalizeImageMarkdown(body), sources), [body, sources]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
