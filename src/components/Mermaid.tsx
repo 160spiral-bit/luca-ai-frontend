@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import DOMPurify from "dompurify";
 
 // Mermaid loads dynamically on first diagram — never in the eager bundle.
@@ -18,8 +18,14 @@ async function ensureMermaid() {
 export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  // Stable render-id prefix (no Math.random/Date.now per render).
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const renderCount = useRef(0);
   const trimmed = code.trim();
   useEffect(() => {
+    // Reset a previous failure so a corrected code change retries rendering
+    // instead of sticking on the <pre> fallback forever.
+    setFailed(false);
     // While streaming, the diagram source is half-written: every token would
     // trigger a doomed render attempt (console error spam). Show code until done.
     if (defer || !trimmed) { if (!trimmed) setFailed(true); return; }
@@ -28,8 +34,10 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
       try {
         const mermaid = await ensureMermaid();
         // mermaid v10 API: render(id, code) returns { svg }. Unique id per
-        // render; empty code guarded above with a <pre> fallback below.
-        const id = "mmd-" + Math.random().toString(36).slice(2) + "-" + Date.now().toString(36);
+        // render via stable useId prefix + monotonic counter; empty code
+        // guarded above with a <pre> fallback below.
+        renderCount.current += 1;
+        const id = `mmd-${uid}-${renderCount.current}`;
         const { svg } = await mermaid.render(id, trimmed);
         // securityLevel: strict relies on Mermaid's bundled DOMPurify config —
         // a third-party version bump away from a hole. Sanitize the SVG here
@@ -42,7 +50,7 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
       }
     })();
     return () => { dead = true; };
-  }, [trimmed, defer]);
+  }, [trimmed, defer, uid]);
   if (failed || !trimmed || defer) return <pre><code>{code}</code></pre>;
-  return <div ref={ref} style={{ minHeight: 40, display: "flex", justifyContent: "center", overflowX: "auto" }} />;
+  return <div ref={ref} className="mermaid-wrap" role="img" aria-label={`Diagram: ${trimmed.slice(0, 100)}`} />;
 }

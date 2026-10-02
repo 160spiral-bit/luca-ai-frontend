@@ -4,6 +4,7 @@ import { ArrowDown, Check, ChevronLeft, ChevronRight, Copy, FileText, Globe, Pen
 const Markdown = lazy(() => import("./Markdown"));
 import ProcessView from "./ProcessView";
 import { copyText } from "../lib/store";
+import { fmtDur } from "../lib/format";
 import type { LucaMessage, Session, Settings } from "../lib/store";
 
 interface Props {
@@ -41,15 +42,7 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-// Wall-clock response time for the message footer ("45s", "3m 26s", "1h 2m").
-function fmtDur(ms?: number): string | null {
-  if (!ms || ms <= 0) return null;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${Math.max(1, s)}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
+// Wall-clock response time is shared (see lib/format.ts).
 
 // Re-parse streaming text at ~30fps instead of per token.
 function useThrottled<T>(value: T, ms = 33): T {
@@ -104,7 +97,7 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
 
         {isContentError ? null : shown ? (
           <div className="bubble">
-            <Suspense fallback={<div style={{ whiteSpace: "pre-wrap" }}>{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} live={msg.streaming} /></Suspense>
+            <Suspense fallback={<div className="wrap-pre">{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} live={msg.streaming} /></Suspense>
           </div>
         ) : null}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
@@ -145,8 +138,8 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
           );
         })()}
         {msg.interrupted && !msg.streaming && (
-          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Stopped.</span>
+          <div className="stopped-row">
+            <span className="stopped-text">Stopped.</span>
             <button className="mini-btn" onClick={() => onRegenerate(session.id, msg.uid)}>Retry</button>
           </div>
         )}
@@ -233,12 +226,12 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   if (editing) {
     return (
       <div className="msg msg-user">
-        <div style={{ maxWidth: "85%", width: "100%" }}>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="edit-textarea"
-            style={{ width: "100%", background: "var(--s1)", border: "1px solid var(--line2)", borderRadius: 12, padding: "10px 14px", resize: "vertical", color: "var(--txt)" }} />
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button className="mini-btn" style={{ padding: "6px 14px", fontSize: 12 }} onClick={() => setEditing(false)}>Cancel</button>
-            <button className="btn-primary" style={{ width: "auto", padding: "6px 18px", fontSize: 12 }} onClick={() => { if (draft.trim()) { onEditResend(session.id, msg.uid, draft.trim()); setEditing(false); } }}>Save</button>
+        <div className="edit-wrap">
+          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} className="edit-field"
+             />
+          <div className="edit-actions">
+            <button className="mini-btn edit-cancel" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn-primary edit-save" onClick={() => { if (draft.trim()) { onEditResend(session.id, msg.uid, draft.trim()); setEditing(false); } }}>Save</button>
           </div>
         </div>
       </div>
@@ -247,7 +240,7 @@ const UserMsg = memo(function UserMsg({ msg, session, onEditResend, onToast }: {
   return (
     <div className="msg msg-user">
       <div className="bubble">
-        <Suspense fallback={displayContent}><Markdown text={displayContent} /></Suspense>
+        <div className="wrap-pre">{displayContent}</div>
       </div>
       {(msg.attachments?.length || 0) > 0 && (
         <div className="att-chips">
@@ -308,10 +301,16 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
   const msgs = session?.messages ?? [];
   // Latch once set: flipping between static and virtualized layout at exactly
   // 60 messages mid-conversation discards scroll position and the auto-scroll
-  // anchor. A ref persists the decision for the session's lifetime.
+  // anchor. A ref persists the decision for the session's lifetime; the effect
+  // below flips it (never during render) and mirrors to state for rendering.
   const virtualLatched = useRef(false);
-  if (msgs.length > 60) virtualLatched.current = true;
-  const useVirtual = virtualLatched.current;
+  const [useVirtual, setUseVirtual] = useState(false);
+  useEffect(() => {
+    if (msgs.length > 60 && !virtualLatched.current) {
+      virtualLatched.current = true;
+      setUseVirtual(true);
+    }
+  }, [msgs.length]);
   const virtualizer = useVirtualizer({
     count: msgs.length,
     getScrollElement: () => threadRef.current,
@@ -339,7 +338,7 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
       <div aria-live="polite" aria-atomic="true" className="sr-only">{announce}</div>
       <div className="thread thread-in" key="thread" ref={threadRef} onScroll={onThreadScroll}><div className="thread-inner">
       {useVirtual ? (
-        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        <div className="virt-shell" style={{ height: virtualizer.getTotalSize() }}>
           {virtualizer.getVirtualItems().map((v) => {
             const m = msgs[v.index];
             if (!m) return null;
@@ -348,7 +347,8 @@ export default function ChatArea({ session, settings, onSuggestion, onRegenerate
                 key={m.uid}
                 data-index={v.index}
                 ref={(el) => { if (el) virtualizer.measureElement(el); }}
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${v.start}px)` }}
+                className="virt-item"
+                style={{ transform: `translateY(${v.start}px)` }}
               >
                 {renderMsg(m, v.index)}
               </div>

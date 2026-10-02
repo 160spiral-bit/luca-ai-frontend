@@ -1,11 +1,17 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useId, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { X } from "lucide-react";
+import CodeBlock from "./CodeBlock";
 import type { Artifact, ArtifactVersion } from "../lib/store";
 
 const Mermaid = lazy(() => import("./Mermaid").then((m) => ({ default: m.Mermaid })));
 
 function CodeView({ code, language }: { code: string; language: string }) {
-  return <pre style={{ margin: 0, padding: 16, overflow: "auto" }}><code>{code}</code><div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>{language}</div></pre>;
+  return (
+    <div className="artifact-code">
+      <CodeBlock lang={language} code={code} />
+    </div>
+  );
 }
 // The sandbox attribute already contains scripts (no allow-same-origin, so no
 // parent DOM/storage access). This meta tag is defense-in-depth for engines
@@ -35,23 +41,24 @@ function ArtifactPreview({ type, content }: { type: string; content: string }) {
   }
   if (type === "markdown") {
     // simple markdown fallback — reuse same container styling
-    return <div style={{ padding: 16, whiteSpace: "pre-wrap", fontSize: 14 }}>{content}</div>;
+    return <div className="artifact-md">{content}</div>;
   }
   if (type === "mermaid" || content.trim().startsWith("xychart")) {
-    return <div style={{ padding: 16 }}><Suspense fallback={<pre>{content}</pre>}><Mermaid code={content} /></Suspense></div>;
+    return <div className="artifact-mermaid"><Suspense fallback={<pre>{content}</pre>}><Mermaid code={content} /></Suspense></div>;
   }
   return <CodeView code={content} language={type} />;
 }
 function VersionScrubber({ versions, index, onChange }: { versions: Artifact["versions"]; index: number; onChange: (i: number) => void }) {
   if (versions.length <= 1) return null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--line)" }}>
-      <span style={{ fontSize: 12, color: "var(--ink-3)" }}>v{index + 1}/{versions.length}</span>
-      <input type="range" min={0} max={versions.length - 1} value={index} onChange={(e) => onChange(Number(e.target.value))} style={{ flex: 1 }} />
+    <div className="version-scrubber">
+      <span className="version-scrubber__label">v{index + 1}/{versions.length}</span>
+      <input type="range" min={0} max={versions.length - 1} value={index} onChange={(e) => onChange(Number(e.target.value))} className="version-scrubber__range" aria-label="Artifact version" />
     </div>
   );
 }
 export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+  const descId = useId();
   const [view, setView] = useState<"preview" | "code">("preview");
   // Follow the latest unless the user scrubbed back (pinned). No setState
   // during render; combined with key={artifact.id} this never shows stale v1.
@@ -62,18 +69,24 @@ export default function ArtifactPanel({ artifact, onClose }: { artifact: Artifac
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="scrim show" />
-        <Dialog.Content className="artifact-panel" aria-label={artifact.title || "Artifact preview"}>
+        <Dialog.Overlay className="scrim" />
+        <Dialog.Content className="artifact-panel" aria-describedby={descId}>
+          <Dialog.Title className="sr-only">{artifact.title || "Artifact preview"}</Dialog.Title>
+          <Dialog.Description className="sr-only" id={descId}>
+            Artifact preview for {artifact.title || "untitled artifact"}. Use Preview and Code tabs to inspect versions.
+          </Dialog.Description>
     <div className="artifact-panel__header">
-        <span className="artifact-panel__title">{artifact.title}</span>
+        <span className="artifact-panel__title" aria-hidden="true">{artifact.title}</span>
         <div className="artifact-panel__tabs">
-          <button onClick={() => setView("preview")} aria-pressed={view === "preview"}>Preview</button>
-          <button onClick={() => setView("code")} aria-pressed={view === "code"}>Code</button>
-          <button onClick={onClose} aria-label="Close artifact" style={{ marginLeft: 8 }}>✕</button>
+          <button type="button" onClick={() => setView("preview")} aria-pressed={view === "preview"}>Preview</button>
+          <button type="button" onClick={() => setView("code")} aria-pressed={view === "code"}>Code</button>
+          <Dialog.Close className="icon-btn artifact-close" aria-label="Close artifact">
+            <X size={16} />
+          </Dialog.Close>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="artifact-versions">
+        <div className="artifact-versions__main">
           <VersionScrubber versions={artifact.versions} index={versionIdx} onChange={setPinned} />
         </div>
         {pinned !== null && pinned < lastIdx && (

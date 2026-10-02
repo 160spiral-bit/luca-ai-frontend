@@ -1,9 +1,12 @@
+import { useId } from "react";
 import { Mermaid } from "./Mermaid";
 
 interface ChartAnnotation { x: string; label: string }
 interface ChartSpec { type: "bar" | "line" | "pie"; labels: string[]; values: number[]; title?: string; annotations?: ChartAnnotation[] }
 
 export default function ChartBlock({ code }: { code: string }) {
+  const uidRaw = useId();
+  const tableId = `chart-table-${uidRaw.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   // xychart-beta is mermaid, not JSON chart — delegate to Mermaid with logging
   if (code.trim().startsWith("xychart-beta") || code.trim().startsWith("xychart")) {
     if (import.meta.env.DEV) console.warn("[viz] ChartBlock received xychart mermaid syntax, delegating to Mermaid:", code.slice(0, 80));
@@ -59,8 +62,8 @@ export default function ChartBlock({ code }: { code: string }) {
         return (
           <g key={k}>
             <title>{a.label}</title>
-            <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} style={{ stroke: "var(--ink-3)" }} strokeWidth={1} strokeDasharray="4 4" />
-            <text x={X(i) + 5} y={padT + 5} fontSize={10} transform={`rotate(90 ${X(i) + 5} ${padT + 5})`} style={{ fill: "var(--ink-2)" }}>{lbl}</text>
+            <line x1={X(i)} x2={X(i)} y1={padT} y2={padT + plotH} stroke="var(--ink-3)" strokeWidth={1} strokeDasharray="4 4" />
+            <text x={X(i) + 5} y={padT + 5} fontSize={10} transform={`rotate(90 ${X(i) + 5} ${padT + 5})`} fill="var(--ink-2)">{lbl}</text>
           </g>
         );
       })}
@@ -72,13 +75,13 @@ export default function ChartBlock({ code }: { code: string }) {
     body = (
       <g>
         {[0.25, 0.5, 0.75, 1].map((f) => (
-          <line key={f} x1={padL} x2={W - 12} y1={padT + plotH * (1 - f)} y2={padT + plotH * (1 - f)} style={{ stroke: "var(--line-strong)", strokeWidth: 1 }} />
+          <line key={f} x1={padL} x2={W - 12} y1={padT + plotH * (1 - f)} y2={padT + plotH * (1 - f)} stroke="var(--line-strong)" strokeWidth={1} />
         ))}
         {spec.values.map((v, i) => (
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
-            <rect x={X(i) - bw / 2} y={Y(v)} width={bw} height={Math.max(padT + plotH - Y(v), 2)} rx={3} style={{ fill: "var(--ink-2)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} style={{ fill: "var(--ink-3)" }}>{axisLabel(spec!.labels[i] ?? "")}</text>
+            <rect x={X(i) - bw / 2} y={Y(v)} width={bw} height={Math.max(padT + plotH - Y(v), 2)} rx={3} fill="var(--ink-2)" />
+            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} fill="var(--ink-3)">{axisLabel(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
@@ -89,14 +92,14 @@ export default function ChartBlock({ code }: { code: string }) {
     body = (
       <g>
         {[0.25, 0.5, 0.75, 1].map((f) => (
-          <line key={f} x1={padL} x2={W - 12} y1={padT + plotH * (1 - f)} y2={padT + plotH * (1 - f)} style={{ stroke: "var(--line-strong)", strokeWidth: 1 }} />
+          <line key={f} x1={padL} x2={W - 12} y1={padT + plotH * (1 - f)} y2={padT + plotH * (1 - f)} stroke="var(--line-strong)" strokeWidth={1} />
         ))}
-        <polyline points={pts} fill="none" style={{ stroke: "var(--ink)", strokeWidth: 2 }} strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={pts} fill="none" stroke="var(--ink)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {spec.values.map((v, i) => (
           <g key={i}>
             <title>{spec!.labels[i]}: {v}</title>
-            <circle cx={X(i)} cy={Y(v)} r={3.5} style={{ fill: "var(--ink)" }} />
-            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} style={{ fill: "var(--ink-3)" }}>{axisLabel(spec!.labels[i] ?? "")}</text>
+            <circle cx={X(i)} cy={Y(v)} r={3.5} fill="var(--ink)" />
+            <text x={X(i)} y={H - 8} textAnchor="end" fontSize={10} transform={`rotate(-35 ${X(i)} ${H - 8})`} fill="var(--ink-3)">{axisLabel(spec!.labels[i] ?? "")}</text>
           </g>
         ))}
         {annotationLayer}
@@ -117,14 +120,14 @@ export default function ChartBlock({ code }: { code: string }) {
           return (
             <g key={i}>
               <title>{spec.labels[i]}: {v}</title>
-              <path d={d} style={{ fill: "var(--ink)", opacity: shades[i % shades.length], stroke: "var(--bg)", strokeWidth: 2 }} />
+              <path d={d} fill="var(--ink)" opacity={shades[i % shades.length]} stroke="var(--bg)" strokeWidth={2} />
             </g>
           );
         })}
         {spec.labels.map((l, i) => (
           <g key={i}>
-            <rect x={280} y={40 + i * 26} width={12} height={12} rx={3} style={{ fill: "var(--ink)", opacity: shades[i % shades.length] }} />
-            <text x={300} y={50 + i * 26} fontSize={12} style={{ fill: "var(--ink-2)" }}>{short(l)} ({spec!.values[i]})</text>
+            <rect x={280} y={40 + i * 26} width={12} height={12} rx={3} fill="var(--ink)" opacity={shades[i % shades.length]} />
+            <text x={300} y={50 + i * 26} fontSize={12} fill="var(--ink-2)">{short(l)} ({spec!.values[i]})</text>
           </g>
         ))}
       </g>
@@ -133,7 +136,31 @@ export default function ChartBlock({ code }: { code: string }) {
   return (
     <div className="chart-block">
       {spec.title && <div className="chart-title">{spec.title}</div>}
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.title || "chart"}>{body}</svg>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={spec.title ? `${spec.title} chart` : "chart"} aria-describedby={tableId}>{body}</svg>
+      <table className="sr-only" id={tableId}>
+        <caption>{spec.title || "Chart data"}</caption>
+        <thead>
+          <tr><th scope="col">Label</th><th scope="col">Value</th></tr>
+        </thead>
+        <tbody>
+          {spec.labels.map((l, i) => (
+            <tr key={i}><th scope="row">{l}</th><td>{spec!.values[i]}</td></tr>
+          ))}
+        </tbody>
+      </table>
+      <details className="chart-details">
+        <summary>Data table</summary>
+        <table className="chart-data-table">
+          <thead>
+            <tr><th scope="col">Label</th><th scope="col">Value</th></tr>
+          </thead>
+          <tbody>
+            {spec.labels.map((l, i) => (
+              <tr key={i}><th scope="row">{l}</th><td>{spec!.values[i]}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
     </div>
   );
 }

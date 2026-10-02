@@ -40,9 +40,22 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const [oauth, setOauth] = useState<{ google: boolean; github: boolean }>({ google: false, github: false });
   const [oauthLoaded, setOauthLoaded] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
+  const [showPw, setShowPw] = useState(false);
   const [avail, setAvail] = useState<{ available: boolean | null; reason: string | null }>({ available: null, reason: null });
   const timer = useRef<number | undefined>(undefined);
+
+  const isEmailValid = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const pwToggle = (label: string) => (
+    <button
+      type="button"
+      className="luca-link pw-toggle"
+      onClick={() => setShowPw((v) => !v)}
+      aria-pressed={showPw}
+      aria-label={showPw ? `Hide ${label}` : `Show ${label}`}
+    >
+      {showPw ? "Hide" : "Show"}
+    </button>
+  );
 
   useEffect(() => {
     fetch(base() + "/api/auth/config").then((r) => r.json())
@@ -75,6 +88,8 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const signin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password) return fail("Email and password are required");
+    if (email.includes("@") && !isEmailValid(email)) return fail("That email doesn't look right");
+    if (password.length < 8) return fail("Password must be at least 8 characters");
     setBusy(true); setErr(null);
     try {
       const r = await fetch(base() + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
@@ -87,6 +102,9 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const signup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password || !name.trim() || !username.trim()) return fail("Please fill in all fields");
+    if (!isEmailValid(email)) return fail("That email doesn't look right");
+    if (password.length < 8) return fail("Password must be at least 8 characters");
+    if (username.trim().length < 3) return fail("Username must be at least 3 characters");
     if (avail.available === false) return fail(avail.reason || "Username not available");
     setBusy(true); setErr(null);
     try {
@@ -113,6 +131,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
   const forgot = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return fail("Enter your email first");
+    if (!isEmailValid(email)) return fail("That email doesn't look right");
     setBusy(true); setErr(null);
     try {
       await fetch(base() + "/api/auth/forgot", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim() }) });
@@ -159,7 +178,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
     const appUrl = window.location.origin + window.location.pathname.replace(/\/+$/, "");
     window.location.href = base() + `/api/auth/${p}?redirect=${encodeURIComponent(appUrl)}`;
   };
-  const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); };
+  const switchMode = (m: Mode) => { setMode(m); setErr(null); setOk(null); setShowPw(false); };
 
   // While the config is loading (e.g. backend cold start), show a placeholder
   // instead of nothing: otherwise the buttons visibly pop in late with zero
@@ -182,13 +201,16 @@ export default function Auth({ onAuth, onGuest }: Props) {
           <h1 className="luca-headline">Think further</h1>
           <p className="luca-sub">Next-generation intelligence for engineering, reasoning, and research.</p>
           <div className="luca-card">
-            {err && <div className="luca-err">{err}</div>}
-            {ok && <div className="luca-ok">{ok}</div>}
+            {err && <div className="luca-err" role="alert">{err}</div>}
+            {ok && <div className="luca-ok" role="status">{ok}</div>}
             {mode === "signin" && (
-              <form onSubmit={signin} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <form onSubmit={signin} className="luca-form">
                 {oauthButtons}
                 <input className="luca-input" type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="username" aria-label="Email or username" />
-                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" aria-label="Password" />
+                <div className="pw-wrap">
+                  <input className="luca-input luca-input--with-toggle" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" autoComplete="current-password" aria-label="Password" minLength={8} />
+                  {pwToggle("password")}
+                </div>
                 <div className="luca-row">
                   <span />
                   <button type="button" className="luca-link" onClick={() => switchMode("forgot")}>
@@ -202,7 +224,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
               </form>
             )}
             {mode === "signup" && (
-              <form onSubmit={signup} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <form onSubmit={signup} className="luca-form">
                 {oauthButtons}
                 <input className="luca-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" autoComplete="name" aria-label="Full name" />
                 <input className="luca-input" type="text" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="Pick a username" autoComplete="username" aria-label="Username" />
@@ -212,7 +234,10 @@ export default function Auth({ onAuth, onGuest }: Props) {
                   </div>
                 )}
                 <input className="luca-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="email" aria-label="Email" />
-                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (8+ characters)" autoComplete="new-password" aria-label="Password" />
+                <div className="pw-wrap">
+                  <input className="luca-input luca-input--with-toggle" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Create a password (8+ characters)" autoComplete="new-password" aria-label="Password" minLength={8} />
+                  {pwToggle("password")}
+                </div>
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Creating account…" : "Continue with email"}</button>
                 <div className="luca-row">
                   <span />
@@ -221,7 +246,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
               </form>
             )}
             {mode === "verify" && (
-              <form onSubmit={verify} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <form onSubmit={verify} className="luca-form">
                 <p className="luca-hint">Enter the 6-digit code sent to {email || "your email"}.</p>
                 <input className="luca-input luca-code" type="text" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="123456" inputMode="numeric" aria-label="Verification code" />
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Verifying…" : "Verify email"}</button>
@@ -232,7 +257,7 @@ export default function Auth({ onAuth, onGuest }: Props) {
               </form>
             )}
             {mode === "forgot" && (
-              <form onSubmit={forgot} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <form onSubmit={forgot} className="luca-form">
                 <p className="luca-hint">Enter your account email and a reset code will be sent to it.</p>
                 <input className="luca-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your email" autoComplete="email" aria-label="Email" />
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Sending…" : "Send reset code"}</button>
@@ -243,10 +268,13 @@ export default function Auth({ onAuth, onGuest }: Props) {
               </form>
             )}
             {mode === "reset" && (
-              <form onSubmit={reset} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <form onSubmit={reset} className="luca-form">
                 <p className="luca-hint">Enter the code from your email, then pick a new password.</p>
                 <input className="luca-input luca-code" type="text" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="123456" inputMode="numeric" aria-label="Reset code" />
-                <input className="luca-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password (8+ characters)" autoComplete="new-password" aria-label="New password" />
+                <div className="pw-wrap">
+                  <input className="luca-input luca-input--with-toggle" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password (8+ characters)" autoComplete="new-password" aria-label="New password" minLength={8} />
+                  {pwToggle("new password")}
+                </div>
                 <button className="luca-btn luca-btn-solid" disabled={busy}>{busy ? "Saving…" : "Set new password"}</button>
                 <div className="luca-row">
                   <span />
@@ -262,9 +290,12 @@ export default function Auth({ onAuth, onGuest }: Props) {
           </div>
         </div>
       </div>
-      <div className="luca-auth-right">
-        <div className="luca-photo">
-          {imgOk && <img src="https://picsum.photos/id/60/1000/1300" alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setImgOk(false)} />}
+      <div className="luca-auth-right" aria-hidden="true">
+        <div className="luca-photo luca-photo--brand">
+          <div className="luca-photo-brand">
+            <span className="luca-photo-word">Luca</span>
+            <span className="luca-photo-tag">Think further</span>
+          </div>
         </div>
       </div>
     </div>

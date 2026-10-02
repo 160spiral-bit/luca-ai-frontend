@@ -3,10 +3,10 @@
 // classes that do not exist, so it was removed rather than shipped dead.)
 export default function Logo({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" style={{ overflow: "visible" }} aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" className="logo-svg" aria-hidden="true">
       <path
         fill="currentColor"
-        style={{ opacity: 0.85 }}
+        className="logo-flare"
         d="M12 3c.3 2.8 1 4.7 2.1 5.9C15.3 10 17.2 10.7 20 11c-2.8.3-4.7 1-5.9 2.1C12.9 14.3 12.2 16.2 12 19c-.3-2.8-1-4.7-2.1-5.9C8.7 12 6.8 11.3 4 11c2.8-.3 4.7-1 5.9-2.1C11 7.7 11.7 5.8 12 3z"
       />
       <path

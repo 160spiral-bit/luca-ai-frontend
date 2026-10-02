@@ -23,7 +23,7 @@ function AnimatedRoutes() {
   );
 }
 
-console.log(`[Luca] build ${__BUILD_ID__}`);
+// Build id is exposed via __BUILD_ID__ where needed; no console output ships.
 
 // Single Toaster for the whole app, hoisted above every route and every App
 // early-return branch (auth, onboarding, logout all toast into branches that

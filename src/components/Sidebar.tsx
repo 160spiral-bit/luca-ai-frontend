@@ -32,10 +32,10 @@ export default function Sidebar(p: Props) {
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Session | null>(null);
   const [userMenu, setUserMenu] = useState(false);
-  const [armClear, setArmClear] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const rowMenuRef = useRef<HTMLDivElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const renameRef = useRef<HTMLInputElement | null>(null);
-  const confirmTimer = useRef<number | undefined>(undefined);
 
   const { mobileOpen, onCloseMobile } = p;
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function Sidebar(p: Props) {
   useEffect(() => {
     if (!menuFor) return;
     const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) { setMenuFor(null); }
+      if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) { setMenuFor(null); }
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenuFor(null); setUserMenu(false); } };
     document.addEventListener("mousedown", onDoc);
@@ -57,13 +57,12 @@ export default function Sidebar(p: Props) {
   useEffect(() => {
     if (!userMenu) return;
     const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setUserMenu(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserMenu(false);
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [userMenu]);
   useEffect(() => { if (renamingId) { renameRef.current?.focus(); renameRef.current?.select(); } }, [renamingId]);
-  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
 
   // Local draft + debounce: filtering walks every message of every chat, so
   // don't re-filter (and re-render the app) on each keystroke.
@@ -111,14 +110,14 @@ export default function Sidebar(p: Props) {
             <div className="empty-recents">{q ? "No chats found" : "No chats yet"}</div>
           )}
           {visible.map((s) => (
-            <div key={s.id} className="chat-row" style={{ position: "relative" }}>
+            <div key={s.id} className="chat-row">
               {renamingId === s.id ? (
-                <div style={{ display: "flex", gap: 4, padding: "2px 0" }}>
+                <div className="rename-row">
                   <input ref={renameRef} value={renameValue} onChange={(e) => setRenameValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } if (e.key === "Escape") setRenamingId(null); }}
                     onBlur={commitRename} aria-label="Rename chat"
-                    style={{ flex: 1, minWidth: 0, borderRadius: 8, border: "1px solid var(--line2)", background: "var(--s1)", padding: "6px 10px", fontSize: 13 }} />
-                  <button className="icon-btn" style={{ width: 32, height: 32 }} onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save name"><Check size={14} /></button>
+                    className="rename-input" />
+                  <button className="icon-btn rename-save" onMouseDown={(e) => { e.preventDefault(); commitRename(); }} aria-label="Save name"><Check size={14} /></button>
                 </div>
               ) : (
                 <>
@@ -134,7 +133,7 @@ export default function Sidebar(p: Props) {
                     aria-current={s.id === p.activeId ? "page" : undefined}
                   >
                     <span className="title">{s.title}</span>
-                    {s.pinned && <Pin size={10} style={{ flexShrink: 0, color: "var(--fnt)" }} />}
+                    {s.pinned && <Pin size={10} className="pin-ico" />}
                     <time>{relTime(lastActivity(s))}</time>
                   </button>
                   <button className="del del-delete" title="Delete" aria-label={`Delete chat ${s.title}`}
@@ -148,7 +147,7 @@ export default function Sidebar(p: Props) {
                 </>
               )}
               {menuFor === s.id && (
-                <div ref={menuRef} className="row-menu-pop" role="menu">
+                <div ref={rowMenuRef} className="row-menu-pop" role="menu">
                   <button role="menuitem" onClick={() => { p.onTogglePin(s.id); setMenuFor(null); }}>{s.pinned ? <PinOff size={13} /> : <Pin size={13} />}{s.pinned ? "Unpin" : "Pin"}</button>
                   <button role="menuitem" onClick={() => { setRenamingId(s.id); setRenameValue(s.title); setMenuFor(null); }}><Pencil size={13} />Rename</button>
                 </div>
@@ -172,7 +171,7 @@ export default function Sidebar(p: Props) {
               </span>
               <span className="user-meta"><strong>{displayName}</strong><small>{p.isAdmin ? "Admin" : "Free"}</small></span>
             </button>
-            <div ref={menuRef} className={`user-menu ${userMenu ? "open" : ""}`} role="menu">
+            <div ref={userMenuRef} className={`user-menu ${userMenu ? "open" : ""}`} role="menu">
               <button role="menuitem" onClick={() => { setUserMenu(false); p.onOpenProfile(); }}>Profile</button>
               <button role="menuitem" onClick={() => {
                 setUserMenu(false);
@@ -180,15 +179,8 @@ export default function Sidebar(p: Props) {
                 if (id && navigator.clipboard) void navigator.clipboard.writeText(id);
               }}>Copy user ID</button>
               <button role="menuitem" onClick={() => {
-                if (!armClear) {
-                  setArmClear(true);
-                  window.clearTimeout(confirmTimer.current);
-                  confirmTimer.current = window.setTimeout(() => setArmClear(false), 2500);
-                  return;
-                }
-                window.clearTimeout(confirmTimer.current);
-                setArmClear(false); setUserMenu(false); p.onClearAll();
-              }}>{armClear ? "Click again to confirm" : "Clear all chats"}</button>
+                setUserMenu(false); setConfirmClear(true);
+              }}>Clear all chats</button>
               <button role="menuitem" onClick={() => { setUserMenu(false); p.onLogout(); }}>Log out</button>
             </div>
           </div>
@@ -200,19 +192,50 @@ export default function Sidebar(p: Props) {
           onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}
         >
           <Dialog.Portal>
-            <Dialog.Overlay className="scrim show" />
-            <Dialog.Content className="modal show" aria-label="Delete chat">
-              <div className="modal-head"><h2>Delete chat?</h2></div>
-              <p style={{ fontSize: 13.5, color: "var(--mut)", margin: "0 0 18px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Dialog.Overlay className="scrim" />
+            <Dialog.Content className="modal" aria-describedby="delete-chat-desc delete-chat-desc-sr">
+              <div className="modal-head"><Dialog.Title asChild><h2>Delete chat?</h2></Dialog.Title></div>
+              <Dialog.Description className="sr-only" id="delete-chat-desc-sr">
+                Permanently delete chat “{confirmDelete.title}”. This cannot be undone.
+              </Dialog.Description>
+              <p className="modal-text modal-text--ellipsis" id="delete-chat-desc">
                 “{confirmDelete.title}” will be gone for good.
               </p>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <Dialog.Close className="btn-ghost" style={{ width: "auto", padding: "9px 18px" }}>Cancel</Dialog.Close>
+              <div className="modal-actions">
+                <Dialog.Close className="btn-ghost btn-auto">Cancel</Dialog.Close>
                 <button
-                  className="btn-ghost btn-danger" style={{ width: "auto", padding: "9px 18px" }}
+                  className="btn-ghost btn-danger btn-auto"
                   onClick={() => { p.onDelete(confirmDelete.id); setConfirmDelete(null); }}
                 >
                   Delete
+                </button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
+      {confirmClear && (
+        <Dialog.Root
+          open
+          onOpenChange={(open) => { if (!open) setConfirmClear(false); }}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="scrim" />
+            <Dialog.Content className="modal" aria-describedby="clear-chats-desc clear-chats-desc-sr">
+              <div className="modal-head"><Dialog.Title asChild><h2>Clear all chats?</h2></Dialog.Title></div>
+              <Dialog.Description className="sr-only" id="clear-chats-desc-sr">
+                Clear all chats on this device. Every chat will be permanently deleted with no undo.
+              </Dialog.Description>
+              <p className="modal-text" id="clear-chats-desc">
+                Every chat on this device will be gone for good. No undo.
+              </p>
+              <div className="modal-actions">
+                <Dialog.Close className="btn-ghost btn-auto">Cancel</Dialog.Close>
+                <button
+                  className="btn-ghost btn-danger btn-auto"
+                  onClick={() => { setConfirmClear(false); p.onClearAll(); }}
+                >
+                  Clear all
                 </button>
               </div>
             </Dialog.Content>

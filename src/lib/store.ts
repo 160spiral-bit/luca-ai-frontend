@@ -56,7 +56,7 @@ export const defaultSettings = (): Settings => ({ ...DEFAULT_SETTINGS, personali
 // session hydrates purely from the new account's server record. Never rely on
 // overwriting individual fields.
 export const clearDeviceState = () => {
-  [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest, K.confirmed, K.guestToken].forEach(del);
+  [K.settings, K.sessions, K.active, K.tier, K.onboard, K.token, K.user, K.guest].forEach(del);
   void clearSessions();
   void clearArtifacts();
   try { sessionStorage.clear(); } catch { /* storage may be unavailable — device keys already removed */ }

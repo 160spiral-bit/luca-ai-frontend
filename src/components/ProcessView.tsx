@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Globe, Code2, FileText, Wrench } from "lucide-react";
 import type { LucaMessage, ToolRound } from "../lib/store";
+import { fmtDur } from "../lib/format";
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function fmtDur(ms?: number): string | null {
-  if (!ms || ms <= 0) return null;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${Math.max(1, s)}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
-}
 
 function prettyToolName(name: string): string {
   if (name === "web_search" || name === "search") return "Web search";
@@ -129,8 +121,10 @@ export default function ProcessView({ msg }: { msg: LucaMessage }) {
 
       {/* Height animates via grid rows, no JS measuring. Collapsed content is
           removed from the a11y tree and tab order: grid 0fr hides it visually
-          but screen readers and find-in-page still see everything. */}
-      <div className="pv-collapse" id={bodyId} data-open={open} aria-hidden={!open || undefined} inert={!open ? true : undefined}>
+          but screen readers and find-in-page still see everything.
+          inert is set via ref (not a boolean prop) so React 18 never warns
+          "Received `true` for non-boolean attribute". */}
+      <div className="pv-collapse" id={bodyId} data-open={open} aria-hidden={!open || undefined} ref={(el) => { if (el) { try { (el as HTMLElement & { inert: boolean }).inert = !open; } catch { /* inert unsupported — aria-hidden still hides it */ } } }}>
         <div className="pv-collapse-inner">
           <div className="pv-body">
             {hasTrace && <div className="pv-trace" ref={traceRef}>{reasoning}</div>}

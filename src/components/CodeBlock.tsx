@@ -70,21 +70,21 @@ export default function CodeBlock({ lang, code }: { lang: string; code: string }
   };
 
   return (
-    <pre>
+    <div className="code-block">
       <div className="code-head">
         <span>{normLang || "code"}</span>
-        <span style={{ display: "inline-flex", gap: 4 }}>
-          <button onClick={async () => { if (await copyText(code)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }}>
+        <span className="code-actions">
+          <button type="button" onClick={async () => { if (await copyText(code)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }} aria-label={copied ? "Copied" : "Copy code"}>
             {copied ? <Check size={13} /> : <Copy size={13} />}{copied ? "Copied" : "Copy"}
           </button>
-          <button onClick={download}>
+          <button type="button" onClick={download} aria-label="Download code">
             <Download size={13} />Download
           </button>
         </span>
       </div>
       {html
-        ? <code className="shiki-wrap" dangerouslySetInnerHTML={{ __html: html }} />
-        : <code>{code}</code>}
-    </pre>
+        ? <div className="shiki-wrap" dangerouslySetInnerHTML={{ __html: html }} />
+        : <pre><code>{code}</code></pre>}
+    </div>
   );
 }

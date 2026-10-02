@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronDown, FileText, Mic, Plus, Square, X } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronDown, FileText, Mic, Paperclip, Square, X } from "lucide-react";
 import { downscaleImage, uid } from "../lib/store";
 import type { Attachment, Settings, Tier } from "../lib/store";
 
@@ -24,6 +24,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [modelOpen, setModelOpen] = useState(false);
+  const modelOptionsId = useId();
 
   // Allow parent to push last user message back into the input for "Edit message"
   useEffect(() => {
@@ -43,6 +44,10 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
 
   // Auto-grow up to 200px, then internal scroll. Reset to auto first so it
   // shrinks again when text is deleted.
+  // Runtime exception (intentional imperative styles): textarea height depends
+  // on live scrollHeight measurement each keystroke, which static CSS cannot
+  // express. `.write textarea` also declares `field-sizing: content` so
+  // supporting browsers auto-grow natively and this effect is a fallback.
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
@@ -76,10 +81,14 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
     requestAnimationFrame(() => taRef.current?.focus());
   };
 
-  const pickModel = (t: Tier) => {
+  const pickModel = (t: Tier, opts?: { keepOpen?: boolean }) => {
     onTierChange(t);
-    // Selected segment stays visible ~140ms, then the chip collapses back.
     window.clearTimeout(collapseTimer.current);
+    if (opts?.keepOpen) return;
+    // Selected segment stays visible ~140ms, then the chip collapses back.
+    // Keyboard arrow-nav passes keepOpen so this timeout never races the
+    // requestAnimationFrame focus below (collapse would hide the radio
+    // mid-focus and yank focus to the textarea).
     collapseTimer.current = window.setTimeout(() => { setModelOpen(false); taRef.current?.focus(); }, 140);
   };
 
@@ -170,7 +179,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}>
-      <div className="composer" style={dragOver ? { borderColor: "var(--line2)" } : undefined}>
+      <div className={`composer${dragOver ? " drag-over" : ""}`}>
         <div className="pending-files">
           {attachments.map((a) => (
             <span key={a.id} className="pf">
@@ -182,7 +191,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
             </span>
           ))}
         </div>
-        <input ref={fileRef} type="file" multiple hidden
+        <input ref={fileRef} type="file" multiple hidden accept="image/*,.pdf,.txt,.md,.markdown,.csv,.json,.js,.jsx,.ts,.tsx,.py,.html,.css,.yaml,.yml,.sql,.sh,.xml,.log"
           onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ""; }} />
         <div className="write">
           <textarea ref={taRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} spellCheck={true}
@@ -195,20 +204,50 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
         </div>
         <div className="tools">
           <div className="left">
-            <button className="tool" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Attach files"><Plus size={15} /></button>
-            <button className={`tool${listening ? " listening" : ""}`} onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" title="Voice input"><Mic size={15} /></button>
-            <div ref={modelRef} className={`model-ctl${modelOpen ? " open" : ""}`}
-              onClick={() => setModelOpen((v) => !v)}
-              role="button" tabIndex={0} aria-expanded={modelOpen} aria-label={`Model: ${TIER_LABEL[tier]}. Activate to change.`}
-              onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setModelOpen((v) => !v); } }}>
+            <button type="button" className="tool" onClick={() => fileRef.current?.click()} aria-label="Attach files" title="Attach files"><Paperclip size={15} /></button>
+            <button type="button" className={`tool${listening ? " listening" : ""}`} onClick={toggleMic} aria-pressed={listening} aria-label="Voice input" title="Voice input"><Mic size={15} /></button>
+            {/* Chevron lives OUTSIDE the radiogroup: a radiogroup must contain
+                only radio roles — the toggle is a separate control. */}
+            <div ref={modelRef} className={`model-ctl${modelOpen ? " open" : ""}`}>
+              <div role="radiogroup" aria-label="Model" className="model-options" id={modelOptionsId}>
               {(["flash", "pro"] as const).map((t) => (
-                <button key={t} className={`seg${tier === t ? " selected" : ""}`}
-                  aria-pressed={tier === t} tabIndex={modelOpen ? 0 : -1}
-                  onClick={(e) => { e.stopPropagation(); pickModel(t); }}>
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={tier === t}
+                  data-tier={t}
+                  className={`seg${tier === t ? " selected" : ""}`}
+                  tabIndex={modelOpen ? 0 : (tier === t ? 0 : -1)}
+                  onClick={() => pickModel(t)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+                    e.preventDefault();
+                    const order: Tier[] = ["flash", "pro"];
+                    const idx = order.indexOf(t);
+                    const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+                    const next = order[(idx + dir + order.length) % order.length] as Tier;
+                    // keepOpen: stay expanded so the rAF focus below lands on
+                    // a visible radio instead of racing the 140ms collapse.
+                    pickModel(next, { keepOpen: true });
+                    requestAnimationFrame(() => {
+                      modelRef.current?.querySelector<HTMLElement>(`[data-tier="${next}"]`)?.focus();
+                    });
+                  }}>
                   {TIER_LABEL[t]}
                 </button>
               ))}
-              <span className="chev" aria-hidden="true"><ChevronDown size={11} /></span>
+              </div>
+              <button
+                type="button"
+                className="chev"
+                aria-expanded={modelOpen}
+                aria-controls={modelOptionsId}
+                aria-label={modelOpen ? "Collapse model options" : `Change model, current: ${TIER_LABEL[tier]}`}
+                onClick={() => setModelOpen((v) => !v)}
+              >
+                <ChevronDown size={11} />
+              </button>
             </div>
           </div>
           <div className="right">
@@ -224,7 +263,7 @@ export default function Composer({ streaming, onSend, onStop, tier, onTierChange
           </div>
         </div>
       </div>
-      <p className="disclaimer">luca can make mistakes. double check the important stuff</p>
+      <p className="disclaimer">Luca can make mistakes. Double-check the important stuff.</p>
     </div>
   );
 }
