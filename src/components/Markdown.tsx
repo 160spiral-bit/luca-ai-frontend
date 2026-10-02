@@ -41,16 +41,32 @@ function isTrustedImageHost(host: string): boolean {
   const h = host.toLowerCase();
   return TRUSTED_IMAGE_SUFFIXES.some((s) => h === s.replace(/^\./, "") || h.endsWith(s));
 }
-function downloadImage(src: string, alt?: string) {
+async function downloadImage(src: string, alt?: string) {
+  const filename = (alt || "luca-image").replace(/[^a-z0-9-_]+/gi, "-").slice(0, 60) + ".png";
   try {
+    const res = await fetch(src, { mode: "cors" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = src;
-    a.download = (alt || "luca-image").replace(/[^a-z0-9-_]+/gi, "-").slice(0, 60) + ".png";
-    a.rel = "noopener";
+    a.href = url;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
-  } catch { window.open(src, "_blank", "noopener"); }
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch {
+    try {
+      const a = document.createElement("a");
+      a.href = src;
+      a.download = filename;
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch { window.open(src, "_blank", "noopener"); }
+  }
 }
 function ImageWithDownload({ src, alt, title }: { src: string; alt?: string; title?: string }) {
   return (
