@@ -380,7 +380,7 @@ body.no-times .msg-time { display: none; }
 .tool.listening { color: var(--txt); background: var(--s2); }
 .model-ctl {
   display: flex; align-items: center; gap: 2px;
-  min-height: 44px; padding: 0 7px 0 10px; margin-left: 4px;
+  min-height: 36px; padding: 0 4px 0 8px; margin-left: 4px;
   border-radius: 9px; border: 1px solid var(--line);
   background: none; cursor: pointer; user-select: none;
   transition: border-color 0.15s, background-color 0.15s;
@@ -397,11 +397,11 @@ body.no-times .msg-time { display: none; }
   transition: max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 0.16s, background-color 0.15s, color 0.15s;
 }
-.seg.selected { color: var(--txt); max-width: 56px; min-width: 44px; opacity: 1; padding: 0 2px; }
-.model-ctl.open .seg { max-width: 64px; min-width: 44px; opacity: 1; padding: 0 9px; }
+.seg.selected { color: var(--txt); max-width: 52px; min-width: 32px; opacity: 1; padding: 0 2px; }
+.model-ctl.open .seg { max-width: 60px; min-width: 32px; opacity: 1; padding: 0 8px; }
 .model-ctl.open .seg:hover { background: var(--s2); color: var(--txt); }
 .model-ctl.open .seg.selected { background: var(--txt); color: var(--ink); }
-.chev { min-width: 44px; min-height: 44px; display: grid; place-items: center; color: var(--mut); transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.chev { min-width: 32px; min-height: 32px; display: grid; place-items: center; color: var(--mut); transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
 button.chev { background: none; border: none; padding: 0; cursor: pointer; border-radius: 4px; }
 .model-ctl.open .chev { transform: rotate(180deg); }
 .send {
@@ -475,7 +475,16 @@ button.chev { background: none; border: none; padding: 0; cursor: pointer; borde
   .field textarea, .field select, .luca-input, .edit-textarea { font-size: 16px; }
 }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: var(--line2); }
-.field .seg { display: flex; gap: 4px; }
+.theme-seg { display: flex; gap: 4px; }
+.theme-seg button {
+  flex: 1; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: none; color: var(--mut);
+  font: 600 13px/1.4 var(--sans); cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.theme-seg button.on { background: var(--txt); color: var(--ink); border-color: var(--txt); }
+.theme-seg button:hover { border-color: var(--line2); color: var(--txt); }
+.theme-seg button.on:hover { color: var(--ink); }
 .field .seg button {
   flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--line);
   background: none; color: var(--mut); font-size: 13px; cursor: pointer;

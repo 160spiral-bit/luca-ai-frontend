@@ -80,9 +80,9 @@ export function SettingsPanel({ settings, onChange, onClose, onReset }: {
   return (
     <Shell title="Settings" onClose={onClose}>
       <div className="field"><span className="flabel" id="theme-label">Theme</span>
-        <div className="seg">
+        <div className="theme-seg" role="radiogroup" aria-labelledby="theme-label">
           {(["dark", "light"] as const).map((t) => (
-            <button key={t} className={settings.theme === t ? "on" : ""} onClick={() => onChange({ theme: t })}>{t === "dark" ? "Dark" : "Light"}</button>
+            <button key={t} role="radio" aria-checked={settings.theme === t} className={settings.theme === t ? "on" : ""} onClick={() => onChange({ theme: t })}>{t === "dark" ? "Dark" : "Light"}</button>
           ))}
         </div>
       </div>
