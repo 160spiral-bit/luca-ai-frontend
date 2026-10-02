@@ -41,17 +41,44 @@ function isTrustedImageHost(host: string): boolean {
   const h = host.toLowerCase();
   return TRUSTED_IMAGE_SUFFIXES.some((s) => h === s.replace(/^\./, "") || h.endsWith(s));
 }
+function downloadImage(src: string, alt?: string) {
+  try {
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = (alt || "luca-image").replace(/[^a-z0-9-_]+/gi, "-").slice(0, 60) + ".png";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch { window.open(src, "_blank", "noopener"); }
+}
+function ImageWithDownload({ src, alt, title }: { src: string; alt?: string; title?: string }) {
+  return (
+    <span className="md-img-wrap">
+      <img src={src} alt={alt || ""} title={title} className="md-img" loading="lazy" />
+      <button
+        type="button"
+        className="img-dl"
+        aria-label={`Download image${alt ? `: ${alt}` : ""}`}
+        title="Download image"
+        onClick={(e) => { e.stopPropagation(); downloadImage(src, alt); }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+      </button>
+    </span>
+  );
+}
 function SafeImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const [loaded, setLoaded] = useState(false);
   const s = String(src || "");
   if (!s) return null;
   if (s.startsWith("data:image/")) {
-    return <img src={s} alt={alt || ""} title={title} className="md-img" loading="lazy" />;
+    return <ImageWithDownload src={s} alt={alt} title={title} />;
   }
   let host = "";
   try { host = new URL(s).hostname.replace(/^www\./, ""); } catch { return null; }
   if (isTrustedImageHost(host)) {
-    return <img src={s} alt={alt || ""} title={title} className="md-img" loading="lazy" />;
+    return <ImageWithDownload src={s} alt={alt} title={title} />;
   }
   if (!loaded) {
     return (
@@ -61,7 +88,7 @@ function SafeImage({ src, alt, title }: { src?: string; alt?: string; title?: st
       </button>
     );
   }
-  return <img src={s} alt={alt || ""} title={title} className="md-img" loading="lazy" />;
+  return <ImageWithDownload src={s} alt={alt} title={title} />;
 }
 
 // Citation binder: unknown ids are left untouched (arr[10] must survive).

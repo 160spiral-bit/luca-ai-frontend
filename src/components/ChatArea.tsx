@@ -99,6 +99,13 @@ const AssistantMsg = memo(function AssistantMsg({ msg, session, isLast, onRegene
           <div className="bubble">
             <Suspense fallback={<div className="wrap-pre">{shownTrimmed}</div>}><Markdown text={shownTrimmed} sources={msg.sources} live={msg.streaming} /></Suspense>
           </div>
+        ) : msg.stage === "image" ? (
+          <div className="bubble">
+            <div className="img-gen-skeleton" role="status" aria-label={msg.stageLabel || "Generating image"}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+              <span>{msg.stageLabel || "Generating image…"}</span>
+            </div>
+          </div>
         ) : null}
         <div className="msg-time">{fmtTime(msg.ts)}</div>
         {cited.length > 0 && (
