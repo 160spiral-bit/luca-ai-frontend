@@ -237,8 +237,11 @@ export function useChatActions(opts: {
                 patchMsg(sid, auid, { artifactIds: ids });
               }
               // Don't yank a full-screen panel over a still-arriving answer on
-              // phones; desktop keeps the auto-open.
-              if (window.matchMedia("(min-width: 801px)").matches) setActiveArtifactId(ev.id);
+              // phones; desktop keeps the auto-open — but only for the chat the
+              // user is actually looking at. A background stream must never
+              // hijack the panel over whatever the user is reading.
+              const isForeground = activeIdRef.current === sid;
+              if (isForeground && window.matchMedia("(min-width: 801px)").matches) setActiveArtifactId(ev.id);
               break;
             }
             case "artifact_delta": {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Download } from "lucide-react";
 import DOMPurify from "dompurify";
+import useTheme from "../hooks/useTheme";
 // Monospace ships with the lazy code chunk — the login page never fetches it.
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
@@ -28,17 +29,11 @@ async function getHighlighter(): Promise<Highlighter> {
   return highlighter;
 }
 
-function themeName() {
-  try {
-    return document.documentElement.getAttribute("data-theme") === "light" ? "github-light" : "github-dark";
-  } catch {
-    return "github-dark";
-  }
-}
-
 export default function CodeBlock({ lang, code }: { lang: string; code: string }) {
   const [copied, setCopied] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
+  const theme = useTheme();
+  const shikiTheme = theme === "light" ? "github-light" : "github-dark";
   const normLang = (lang || "").toLowerCase();
 
   useEffect(() => {
@@ -51,13 +46,13 @@ export default function CodeBlock({ lang, code }: { lang: string; code: string }
         // Shiki escapes text nodes, but the HTML passes through this sink
         // unexamined otherwise — sanitize so a highlighter bug or theme
         // regression can never become script execution from model output.
-        if (!dead) setHtml(DOMPurify.sanitize(hl.codeToHtml(code, { lang: normLang, theme: themeName() })));
+        if (!dead) setHtml(DOMPurify.sanitize(hl.codeToHtml(code, { lang: normLang, theme: shikiTheme })));
       } catch {
         if (!dead) setHtml(null);
       }
     }).catch(() => { if (!dead) setHtml(null); });
     return () => { dead = true; };
-  }, [normLang, code]);
+  }, [normLang, code, shikiTheme]);
 
   const download = () => {
     const blob = new Blob([code], { type: "text/plain;charset=utf-8" });

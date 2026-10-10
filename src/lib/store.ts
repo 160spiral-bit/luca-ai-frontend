@@ -241,3 +241,65 @@ export function downscaleImage(dataUrl: string, maxSize: number): Promise<string
     img.src = dataUrl;
   });
 }
+
+// Whole-chat export. Guests have no server copy — this file is their only
+// durable record, so it must round-trip everything a reader needs: roles,
+// tool rounds, sources, and image URLs (inline images would double the file).
+export function sessionToMarkdown(s: Session): string {
+  const L: string[] = [];
+  L.push(`# ${s.title || "Untitled chat"}`);
+  L.push("");
+  L.push(`- Exported: ${new Date().toISOString()}`);
+  L.push(`- Created: ${new Date(s.createdAt).toISOString()}`);
+  L.push(`- Messages: ${s.messages.length}`);
+  L.push("");
+  for (const m of s.messages) {
+    if (m.role === "user") {
+      L.push("## You");
+      L.push("");
+      L.push(m.content || "_(empty)_");
+    } else {
+      const tierLabel = m.tier === "pro" ? "Pro" : m.tier === "flash" ? "Flash" : "";
+      L.push(`## Luca${tierLabel ? ` ${tierLabel}` : ""}`);
+      L.push("");
+      if (m.reasoning && m.reasoning.trim()) {
+        L.push("<details><summary>Reasoning</summary>");
+        L.push("");
+        L.push(m.reasoning.trim());
+        L.push("");
+        L.push("</details>");
+        L.push("");
+      }
+      L.push(m.content || "_(empty)_");
+      if (m.toolRounds?.length) {
+        L.push("");
+        for (const r of m.toolRounds) {
+          const status = r.status === "done" ? `${r.ms ?? "?"}ms` : "interrupted";
+          const srcs = r.sources.length ? ` - ${r.sources.length} source(s)` : "";
+          const query = r.query ? ` \`${r.query}\`` : "";
+          L.push(`> Tool \`${r.name}\`${query} - ${status}${srcs}`);
+        }
+      }
+      if (m.sources?.length) {
+        L.push("");
+        for (const src of m.sources) {
+          L.push(`[${src.id}] [${src.title || src.domain}](${src.url})`);
+        }
+      }
+    }
+    L.push("");
+  }
+  return L.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+export function downloadSession(s: Session): void {
+  const blob = new Blob([sessionToMarkdown(s)], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(s.title || "luca-chat").replace(/[^a-z0-9-_]+/gi, "-").slice(0, 60)}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}

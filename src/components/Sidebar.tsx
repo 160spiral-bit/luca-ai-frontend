@@ -37,13 +37,8 @@ export default function Sidebar(p: Props) {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const renameRef = useRef<HTMLInputElement | null>(null);
 
-  const { mobileOpen, onCloseMobile } = p;
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseMobile(); };
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); };
-  }, [mobileOpen, onCloseMobile]);
+  const drawerTitleId = "sidebar-drawer-title";
+  const drawerDescId = "sidebar-drawer-desc";
   useEffect(() => {
     if (!menuFor) return;
     const onDoc = (e: MouseEvent) => {
@@ -88,11 +83,9 @@ export default function Sidebar(p: Props) {
 
   const displayName = (p.profile?.name || p.authUser?.name || "User").trim() || "User";
 
-  return (
+  const sidebarInner = () => (
     <>
-      <div className={`scrim sidebar-scrim ${p.mobileOpen ? "show" : ""}`} onClick={p.onCloseMobile} aria-hidden="true" />
-      <aside className={`sidebar ${p.collapsed ? "hidden-side" : ""} ${p.mobileOpen ? "mobile-open" : ""}`} aria-label="Sidebar">
-        <div className="sb-head">
+    <div className="sb-head">
           <button className="wordmark" onClick={() => { p.onNew(); p.onCloseMobile(); }} aria-label="Luca home">Luca</button>
           <button className="icon-btn only-desktop" onClick={p.onToggleSidebar} aria-label="Collapse sidebar"><PanelLeft size={16} /></button>
           <button className="icon-btn only-mobile" onClick={p.onCloseMobile} aria-label="Close sidebar"><X size={20} /></button>
@@ -185,7 +178,34 @@ export default function Sidebar(p: Props) {
             </div>
           </div>
         </div>
-      </aside>
+    </>
+  );
+
+  return (
+    <>
+      {p.mobileOpen ? (
+        <Dialog.Root open onOpenChange={(o) => { if (!o) p.onCloseMobile(); }}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="scrim" />
+            <Dialog.Content
+              className="sidebar mobile-open"
+              aria-label="Chats"
+              aria-labelledby={drawerTitleId}
+              aria-describedby={drawerDescId}
+            >
+              <Dialog.Title className="sr-only" id={drawerTitleId}>Chats</Dialog.Title>
+              <Dialog.Description className="sr-only" id={drawerDescId}>
+                Browse, search and manage your conversations
+              </Dialog.Description>
+              {sidebarInner()}
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      ) : (
+        <aside className={`sidebar ${p.collapsed ? "hidden-side" : ""}`} aria-label="Sidebar">
+          {sidebarInner()}
+        </aside>
+      )}
       {confirmDelete && (
         <Dialog.Root
           open

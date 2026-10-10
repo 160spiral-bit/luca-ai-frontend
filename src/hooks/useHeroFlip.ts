@@ -15,7 +15,10 @@ export function useHeroFlip(
   }, [sendMessage]);
   useEffect(() => {
     if (isEmpty || !heroRect.current) return;
-    const el = document.querySelector(".main > .composer-zone");
+    // The docked composer lives inside .conv (or .home on the hero still).
+    // The old selector `.main > .composer-zone` is a direct-child match that
+    // never resolved, so this animation silently never ran.
+    const el = document.querySelector(".conv .composer-zone");
     const from = heroRect.current;
     heroRect.current = null;
     if (!el) return;

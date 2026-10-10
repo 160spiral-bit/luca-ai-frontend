@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import AuthGates from "./components/AuthGates";
 import AppMain from "./components/AppMain";
 import AppPanels from "./components/AppPanels";
+import CommandPalette from "./components/CommandPalette";
 import { useNavigate } from "react-router-dom";
 import { mintGuestSession, pingHealth, putUserData, refreshMe } from "./lib/api";
 import {
@@ -13,6 +14,7 @@ import {
   loadSettings, loadTier, loadToken,
   saveActiveId, saveArtifacts, saveAuthUser, saveProfile, saveSessions, saveSettings,
   saveTier, saveToken, setGuest, uid,
+  downloadSession,
 } from "./lib/store";
 import type { Artifact, AuthUser, Profile, Session, Settings, Tier } from "./lib/store";
 import { useStreams } from "./hooks/useStreams";
@@ -22,6 +24,7 @@ import { useChatActions } from "./hooks/useChatActions";
 import { useAuthBootstrap } from "./hooks/useAuthBootstrap";
 import { useHeroFlip } from "./hooks/useHeroFlip";
 import { useLayoutDebug } from "./hooks/useLayoutDebug";
+import useHotkeys from "./hooks/useHotkeys";
 
 export default function App() {
   const [profile, setProfile] = useState<Profile | null>(() => loadProfile());
@@ -31,6 +34,7 @@ export default function App() {
   const [tier, setTier] = useState<Tier>(() => loadTier());
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [panel, setPanel] = useState<"settings" | "profile" | "admin" | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,8 +69,8 @@ export default function App() {
     return () => { vv.removeEventListener("resize", set); vv.removeEventListener("scroll", set); };
   }, []);
 
-  const toast = useCallback((text: string) => {
-    sonnerToast(text, { duration: 2400 });
+  const toast = useCallback((text: string, opts?: Parameters<typeof sonnerToast>[1]) => {
+    sonnerToast(text, { duration: 2400, ...opts });
   }, []);
   const storageFullToast = useCallback(() => {
     toast("Couldn't save chats — storage is full. Delete old chats to free space.");
@@ -229,6 +233,22 @@ export default function App() {
     sendMessage,
   });
 
+  const exportActive = useCallback(() => {
+    const s = activeSession;
+    if (!s) { toast("Nothing to export yet — start a chat first"); return; }
+    downloadSession(s);
+    toast("Chat exported as Markdown");
+  }, [activeSession, toast]);
+
+  useHotkeys({
+    onNewChat: () => switchChat(null),
+    onOpenPalette: () => setPaletteOpen(true),
+    onStopStreaming: () => stopChat(),
+    onToggleTheme: () => setSettings((s) => ({ ...s, theme: s.theme === "dark" ? "light" : "dark" })),
+    onOpenSettings: () => setPanel("settings"),
+    isStreaming: !!streamingActive,
+  });
+
   return (
     <AuthGates authLoading={authLoading} sessionsReady={sessionsReady}
       authUser={authUser} guest={guest} onboarding={onboarding}
@@ -248,9 +268,24 @@ export default function App() {
           onTogglePin={(id) => setSessions((p) => p.map((s) => (s.id === id ? { ...s, pinned: !s.pinned } : s)))}
           onDelete={(id) => {
             stopChat(id);
+            const victim = sessions.find((s) => s.id === id) || null;
+            const wasActive = activeId === id;
             setSessions((p) => p.filter((s) => s.id !== id));
-            if (activeId === id) setActiveId(null);
-            toast("Chat successfully deleted");
+            if (wasActive) setActiveId(null);
+            toast("Chat successfully deleted", victim
+              ? {
+                  action: {
+                    label: "Undo",
+                    onClick: () => {
+                      setSessions((p) => {
+                        const seen = new Set(p.map((s) => s.id));
+                        return seen.has(victim.id) ? p : [...p, victim];
+                      });
+                      if (wasActive) setActiveId(victim.id);
+                    },
+                  },
+                }
+              : undefined);
           }}
           onOpenSettings={() => setPanel("settings")} onOpenProfile={() => setPanel("profile")}
           onClearAll={clearAllChats} onLogout={logout}
@@ -274,6 +309,21 @@ export default function App() {
           onSaveProfile={(patch) => setProfile((prev) => { const next = { ...(prev || { name: "", persona: null, theme: settings.theme, avatar: null }), ...patch }; saveProfile(next); return next; })}
           onLogout={logout} onToast={toast} token={loadToken() || ""} onRefreshSelf={refreshSelf}
           activeArtifactId={activeArtifactId} artifacts={artifacts} onCloseArtifact={() => setActiveArtifactId(null)} />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          sessions={sessions}
+          activeId={activeId}
+          theme={settings.theme}
+          isAdmin={!!authUser?.isAdmin}
+          onSelectChat={(id) => switchChat(id)}
+          onNewChat={() => switchChat(null)}
+          onToggleTheme={() => setSettings((s) => ({ ...s, theme: s.theme === "dark" ? "light" : "dark" }))}
+          onOpenSettings={() => setPanel("settings")}
+          onOpenProfile={() => setPanel("profile")}
+          onOpenAdmin={() => setPanel("admin")}
+          onExportActive={exportActive}
+        />
       </div>
     </AuthGates>
   );

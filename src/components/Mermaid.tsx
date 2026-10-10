@@ -1,14 +1,16 @@
 import { useEffect, useId, useRef, useState } from "react";
 import DOMPurify from "dompurify";
+import useTheme from "../hooks/useTheme";
 
 // Mermaid loads dynamically on first diagram — never in the eager bundle.
-// Theme-aware (was hardcoded dark) and securityLevel strict (was loose,
-// which allowed HTML injection through diagram labels).
+// Theme-aware: the init theme is derived from the live React theme state, so a
+// theme switch re-initializes and re-renders instead of leaving a dark SVG
+// under a light UI. securityLevel strict (was loose, which allowed HTML
+// injection through diagram labels).
 let initTheme: string | null = null;
-async function ensureMermaid() {
+async function ensureMermaid(theme: "light" | "dark") {
   const mermaid = (await import("mermaid")).default;
-  const dark = document.documentElement.getAttribute("data-theme") !== "light";
-  const want = dark ? "dark" : "default";
+  const want = theme === "light" ? "default" : "dark";
   if (initTheme !== want) {
     mermaid.initialize({ startOnLoad: false, theme: want, securityLevel: "strict" });
     initTheme = want;
@@ -18,6 +20,7 @@ async function ensureMermaid() {
 export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  const theme = useTheme();
   // Stable render-id prefix (no Math.random/Date.now per render).
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const renderCount = useRef(0);
@@ -32,7 +35,7 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
     let dead = false;
     (async () => {
       try {
-        const mermaid = await ensureMermaid();
+        const mermaid = await ensureMermaid(theme);
         // mermaid v10 API: render(id, code) returns { svg }. Unique id per
         // render via stable useId prefix + monotonic counter; empty code
         // guarded above with a <pre> fallback below.
@@ -50,7 +53,7 @@ export function Mermaid({ code, defer }: { code: string; defer?: boolean }) {
       }
     })();
     return () => { dead = true; };
-  }, [trimmed, defer, uid]);
+  }, [trimmed, defer, uid, theme]);
   if (failed || !trimmed || defer) return <pre><code>{code}</code></pre>;
   return <div ref={ref} className="mermaid-wrap" role="img" aria-label={`Diagram: ${trimmed.slice(0, 100)}`} />;
 }
