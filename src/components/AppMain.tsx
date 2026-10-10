@@ -3,6 +3,14 @@ import ChatArea from "./ChatArea";
 import Composer from "./Composer";
 import type { Attachment, Session, Settings, Tier } from "../lib/store";
 
+const SUGGESTIONS = [
+  "Explain a hard topic simply",
+  "Debug my code",
+  "Draw me a picture of a sunset",
+  "Compare two things",
+  "Help me write something",
+];
+
 // Main column (topbar + hero/conv) extracted from App.tsx.
 export default function AppMain(p: {
   isEmpty: boolean;
@@ -44,6 +52,11 @@ export default function AppMain(p: {
           <div className="hero">
             <button className="icon-btn only-mobile hero-menu-btn" onClick={p.onOpenMobile} aria-label="Open sidebar"><Menu size={17} /></button>
             <h1 className="hero-greeting">{p.greetingHead} — <em>{p.greetingSub}</em></h1>
+            <div className="hero-suggestions">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="suggestion-chip" onClick={() => p.sendFromHero(s, [])}>{s}</button>
+              ))}
+            </div>
             <Composer streaming={p.streamingActive} onSend={p.sendFromHero} onStop={p.onStop}
               tier={p.tier} onTierChange={p.onTierChange} settings={p.settings} onToast={p.onToast} prefill={p.composerDraft} onPrefillConsumed={p.onPrefillConsumed} />
           </div>
