@@ -4,7 +4,6 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import "./index.css";
 import App from "./App";
-import Landing from "./components/Landing";
 import { About } from "./pages";
 
 // HashRouter, not BrowserRouter: static hosting (Pages subpath + Vercel)
@@ -15,10 +14,10 @@ function AnimatedRoutes() {
   return (
     <main className="route-enter">
       <Routes>
-        <Route path="/" element={<Landing />} />
+        <Route path="/" element={<App />} />
         <Route path="/chat" element={<App />} />
         <Route path="/about" element={<About />} />
-        <Route path="*" element={<Landing />} />
+        <Route path="*" element={<App />} />
       </Routes>
     </main>
   );

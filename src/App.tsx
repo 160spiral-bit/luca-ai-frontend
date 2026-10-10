@@ -5,7 +5,6 @@ import Sidebar from "./components/Sidebar";
 import AuthGates from "./components/AuthGates";
 import AppMain from "./components/AppMain";
 import AppPanels from "./components/AppPanels";
-import BottomNav from "./components/BottomNav";
 import { useNavigate } from "react-router-dom";
 import { mintGuestSession, pingHealth, putUserData, refreshMe } from "./lib/api";
 import {
@@ -269,12 +268,6 @@ export default function App() {
           session={activeSession} onSuggestion={sendSuggestion} onRegenerate={regenerate}
           onEditResend={editAndResend} onVersion={setVersion} onEditDraft={handleEditDraft}
           onOpenArtifact={openArtifact} onPreviewHtml={previewHtml} onOpenMobile={() => setMobileNav(true)} />
-        <BottomNav
-          onNewChat={() => switchChat(null)}
-          onOpenSettings={() => setPanel("settings")}
-          onOpenProfile={() => setPanel("profile")}
-          onOpenSidebar={() => { if (collapsed) setCollapsed(false); setMobileNav(true); }}
-        />
         <AppPanels panel={panel} settings={settings}
           onSettings={(patch) => setSettings((s) => ({ ...s, ...patch }))} onReset={resetEverything} onClosePanel={() => setPanel(null)}
           profile={profile} authUser={authUser}
