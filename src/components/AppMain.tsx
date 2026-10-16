@@ -3,13 +3,6 @@ import ChatArea from "./ChatArea";
 import Composer from "./Composer";
 import type { Attachment, Session, Settings, Tier } from "../lib/store";
 
-const HERO_PROMPTS = [
-  "Explain the CAP theorem with a real example",
-  "Write a SQL query to find duplicate rows",
-  "Summarize a research paper's abstract",
-  "Generate a logo concept for a coffee startup",
-];
-
 // Main column (topbar + hero/conv) extracted from App.tsx.
 export default function AppMain(p: {
   isEmpty: boolean;
@@ -53,13 +46,6 @@ export default function AppMain(p: {
             <h1 className="hero-greeting">{p.greetingHead} — <em>{p.greetingSub}</em></h1>
             <Composer streaming={p.streamingActive} onSend={p.sendFromHero} onStop={p.onStop}
               tier={p.tier} onTierChange={p.onTierChange} settings={p.settings} onToast={p.onToast} prefill={p.composerDraft} onPrefillConsumed={p.onPrefillConsumed} />
-            <div className="hero-suggests">
-              {HERO_PROMPTS.map((t) => (
-                <button key={t} type="button" className="hero-chip" onClick={() => p.sendFromHero(t, [])}>
-                  {t}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       ) : (

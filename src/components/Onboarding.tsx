@@ -1,16 +1,4 @@
-import { Camera } from "lucide-react";
-import Logo from "./Logo";
 import { downscaleImage } from "../lib/store";
-
-function GateHead({ step }: { step: string }) {
-  return (
-    <div className="gate-head">
-      <span className="gate-mark"><Logo size={15} /></span>
-      <span className="gate-brand">Luca</span>
-      <span className="gate-step">{step}</span>
-    </div>
-  );
-}
 
 export function UsernameGate({
   email,
@@ -25,10 +13,9 @@ export function UsernameGate({
 }) {
   return (
     <div className="center-page">
-      <div className="gate-card">
-        <GateHead step="Step 1 of 2" />
-        <h1 className="gate-title">Pick a username</h1>
-        <p className="gate-sub">Signed in as {email}. Usernames stick around, so pick one you like.</p>
+      <div className="auth-card">
+        <h1>Pick a username</h1>
+        <p className="sub">Signed in as {email}. Usernames stick around, so pick one you like.</p>
         <div className="field">
           <label htmlFor="un">Username</label>
           <input
@@ -40,7 +27,7 @@ export function UsernameGate({
             maxLength={20}
           />
         </div>
-        <button className="btn-primary gate-cta" disabled={draft.trim().length < 3} onClick={onSubmit}>
+        <button className="btn-primary" disabled={draft.trim().length < 3} onClick={onSubmit}>
           Continue
         </button>
       </div>
@@ -63,10 +50,9 @@ export function ProfileGate({
 }) {
   return (
     <div className="center-page">
-      <div className="gate-card">
-        <GateHead step="Step 2 of 2" />
-        <h1 className="gate-title">What should I call you?</h1>
-        <p className="gate-sub">This helps me answer in a way that suits you. You can change it anytime in your profile.</p>
+      <div className="auth-card">
+        <h1>What should I call you?</h1>
+        <p className="sub">This helps me answer in a way that suits you. You can change it anytime in your profile.</p>
         <div className="field">
           <span className="flabel" id="avatar-label">
             Profile picture <span className="opt">(optional)</span>
@@ -81,7 +67,6 @@ export function ProfileGate({
             ) : (
               nameDraft.trim() ? nameDraft.trim().charAt(0).toUpperCase() : "?"
             )}
-            <span className="avatar-badge" aria-hidden="true"><Camera size={11} /></span>
             <input
               type="file"
               accept="image/*"
@@ -111,7 +96,7 @@ export function ProfileGate({
             maxLength={40}
           />
         </div>
-        <button className="btn-primary gate-cta" onClick={onSubmit}>
+        <button className="btn-primary" onClick={onSubmit}>
           Start chatting
         </button>
       </div>

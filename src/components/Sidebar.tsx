@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, MessageSquare, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
+import { Check, Pencil, Pin, PinOff, Plus, Search, Settings as SettingsIcon, ShieldCheck, Trash2, X, PanelLeft } from "lucide-react";
 import type { AuthUser, Profile, Session } from "../lib/store";
 
 function relTime(ts: number): string {
@@ -100,7 +100,7 @@ export default function Sidebar(p: Props) {
         <div className="label">Recents</div>
         <nav className="recents" aria-label="Recent chats">
           {visible.length === 0 && (
-            <div className="empty-recents"><MessageSquare size={13} aria-hidden="true" />{q ? "No chats found" : "No chats yet"}</div>
+            <div className="empty-recents">{q ? "No chats found" : "No chats yet"}</div>
           )}
           {visible.map((s) => (
             <div key={s.id} className="chat-row">
