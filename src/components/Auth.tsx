@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Image as ImageIcon, Shield, Zap } from "lucide-react";
 import Logo from "./Logo";
 import { base, verifyToken } from "../lib/api";
 import { saveAuthUser, saveToken, setGuest } from "../lib/store";
@@ -26,6 +27,8 @@ function GithubIcon() {
 }
 
 type Mode = "signin" | "signup" | "verify" | "forgot" | "reset";
+
+const DEMO_REGEX = "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$";
 
 export default function Auth({ onAuth, onGuest }: Props) {
   const [mode, setMode] = useState<Mode>("signin");
@@ -292,9 +295,45 @@ export default function Auth({ onAuth, onGuest }: Props) {
       </div>
       <div className="luca-auth-right" aria-hidden="true">
         <div className="luca-photo luca-photo--brand">
-          <div className="luca-photo-brand">
-            <span className="luca-photo-word">Luca</span>
-            <span className="luca-photo-tag">Think further</span>
+          <div className="luca-show-head">
+            <Logo size={14} />
+            <span className="luca-show-word">Luca</span>
+            <span className="luca-show-tag">Think further</span>
+          </div>
+          <div className="luca-demo">
+            <div className="luca-demo-user">Write a regex that matches ISO-8601 dates.</div>
+            <div className="luca-demo-ai">
+              <span className="luca-demo-who"><Logo size={11} />Luca</span>
+              <code className="luca-demo-code">{DEMO_REGEX}</code>
+              <p>Anchor with <code>^</code> and <code>$</code> so partial matches don't slip through, and keep the timezone suffix optional if you accept local times.</p>
+            </div>
+            <div className="luca-demo-meta">
+              <span className="luca-demo-pill"><Zap size={11} />Flash · 0.9s</span>
+              <span className="luca-demo-pill">Copy</span>
+            </div>
+          </div>
+          <div className="luca-feats">
+            <div className="luca-feat">
+              <span className="luca-feat-ico"><Zap size={14} /></span>
+              <span>
+                <strong>Flash &amp; Pro reasoning</strong>
+                <em>Instant answers up front, deeper thinking on demand.</em>
+              </span>
+            </div>
+            <div className="luca-feat">
+              <span className="luca-feat-ico"><Shield size={14} /></span>
+              <span>
+                <strong>Private by design</strong>
+                <em>Guest mode keeps every chat on this device.</em>
+              </span>
+            </div>
+            <div className="luca-feat">
+              <span className="luca-feat-ico"><ImageIcon size={14} /></span>
+              <span>
+                <strong>Image generation</strong>
+                <em>Describe an idea and watch it render inline.</em>
+              </span>
+            </div>
           </div>
         </div>
       </div>
